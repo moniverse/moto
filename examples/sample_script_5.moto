@@ -1,0 +1,31 @@
+// script 5
+// Task for data cleaning using Python
+task prepareData {
+    import pandas as pd
+    df = pd.read_csv('data.csv')
+    df['cleaned'] = df['data'].apply(lambda x: x.strip())
+    df.to_csv('cleaned_data.csv', index=False)
+}:python
+
+// Task for data analysis using R
+task analyzeData {
+    library(ggplot2)
+    data <- read.csv('cleaned_data.csv')
+    plot <- ggplot(data, aes(x=cleaned)) + geom_histogram()
+    ggsave('analysis_plot.png')
+}:r
+
+// Task for compiling a report using Shell
+task compileReport {
+    echo "Compiling report with analysis results."
+    cat "Analysis Results" > report.md
+    echo "![Analysis Plot](analysis_plot.png)" >> report.md
+}:shell
+
+// Main task to orchestrate the workflow
+task main {
+    prepareData()
+    analyzeData()
+    compileReport()
+}:moto
+// end 

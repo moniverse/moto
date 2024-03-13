@@ -1,0 +1,14 @@
+// script 4
+runtime red {
+    task execute {
+        Rscript -e "[:block]"
+    }:shell
+}
+
+task analyzeData {
+    // R code block for data analysis
+    library(ggplot2)
+    data <- read.csv('cleaned_data.csv')
+    print(summary(data))
+}:red
+// end 
