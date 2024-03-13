@@ -3,7 +3,8 @@ $cargoTomlPath = "./Cargo.toml"
 
 # Ensure Cargo.toml exists
 if (-Not (Test-Path $cargoTomlPath)) {
-    Write-Output "Cargo.toml not found at path: $cargoTomlPath"
+    Write-Output "❌ Cargo.toml not found at path: $cargoTomlPath"
+    Write-Output "Please ensure the script is run from the root directory of your Rust project."
     exit 1
 }
 
@@ -14,7 +15,8 @@ $cargoTomlContent = Get-Content -Path $cargoTomlPath -Raw
 $matched = $cargoTomlContent -match 'version = "([^"]+)"'
 
 if (-Not $matched) {
-    Write-Output "Version line not found in Cargo.toml"
+    Write-Output "❌ Version line not found in Cargo.toml"
+    Write-Output "Please ensure the Cargo.toml file contains a valid version line."
     exit 1
 }
 
@@ -38,17 +40,37 @@ $newCargoTomlContent = $cargoTomlContent -replace ('version = "' + [regex]::Esca
 # Write the new Cargo.toml content back to the file
 Set-Content -Path $cargoTomlPath -Value $newCargoTomlContent
 
-# Debug: Output the new version to verify it's correct
-Write-Output "Updated version to $newVersion in Cargo.toml"
+Write-Output "✅ Updated version to $newVersion in Cargo.toml"
 
-# add ALL files to git
+# Get the current date
+$publishDate = Get-Date -Format "yyyy-MM-dd"
+
+# Commit messages with publish date
+$commitMessage = "🚀 Bump version to $newVersion ($publishDate)"
+$releaseMessage = "Release v$newVersion ($publishDate)"
+
+# Add ALL files to git
 git add .
 
-# Commit the change with a message indicating the new version
-git commit -m "bump to 🚀 $newVersion and release 🎉"
+# Commit the change with the commit message
+git commit -m "$commitMessage"
 
-# Tag the commit as a release
-git tag -a "v$newVersion" -m "Release v$newVersion"
+# Tag the commit as a release with the release message
+git tag -a "v$newVersion" -m "$releaseMessage"
 
 # Push the commit and tag to your repository
+Write-Output "🎉 Pushing changes and tags to the repository..."
 git push && git push --tags
+
+# Publish the package to crates.io
+Write-Output "📦 Publishing package to crates.io..."
+cargo publish
+
+if ($LASTEXITCODE -eq 0) {
+    Write-Output "✨ Package successfully published to crates.io!"
+} else {
+    Write-Output "❌ Failed to publish package to crates.io."
+    Write-Output "Please check the output above for more details."
+}
+
+Write-Output "🎉 Release v$newVersion completed!"

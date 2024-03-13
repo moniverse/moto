@@ -1,14 +1,13 @@
 [package]
 name = "moto"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2021"
 authors = ["incredimo <a@xo.rs>"]
 description = "moto - motivated automation"
 license = "MIT"
-repository = "https://github.com/zemorepo/moto"
+repository = "https://github.com/moniverse/moto"
 
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 async-trait = "0.1.68"
@@ -32,6 +31,17 @@ ratatui = "0.26.1"
 chrono = "0.4.34"
 md5 = "0.7.0"
 uuid = { version = "1.7.0", features = ["v4"] }
+
+[[bin]]
+name = "moto"
+path = "src/main.rs"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+debug = false
+panic = "abort"
 
 
 
