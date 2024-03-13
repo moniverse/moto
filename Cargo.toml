@@ -1,6 +1,6 @@
 [package]
 name = "moto"
-version = "0.1.15"
+version = "0.1.17"
 edition = "2021"
 authors = ["incredimo <a@xo.rs>"]
 description = "moto - motivated automation"
@@ -19,8 +19,8 @@ lazy_static = "1.4.0"
 nom = "7.1.3"
 once_cell = "1.18.0"
 rand = "0.8.5"
-tokio = { version = "1.28.2", features = ["full"] }
-tokio-stream = { version = "0.1.15", features = ["full"] }
+tokio = { version = "1.36.0", features = ["full"] }
+tokio-stream = { version = "0.1.14", features = ["full"] }
 tokio-util = { version = "0.7.8", features = ["codec"] }
 minimo =   "0.3.25"
 textwrap = "0.16.1"
@@ -42,6 +42,7 @@ codegen-units = 1
 opt-level = 3
 debug = false
 panic = "abort"
+
 
 
 

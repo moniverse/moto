@@ -3,7 +3,7 @@ name: moto release
 on:
   push:
     branches:
-      - master
+      - main
 
 permissions:
   contents: write
