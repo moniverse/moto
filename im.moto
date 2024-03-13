@@ -7,7 +7,7 @@ runtime dart {
         $something = @'[:block]'@
         $something | Out-File -FilePath "./_.dart" -Encoding UTF8
         dart run "./_.dart"
-    }:shell
+    }:ps
 }:moto
 
 
@@ -18,7 +18,7 @@ runtime rust {
         $something | Out-File -FilePath "./_.rs" -Encoding UTF8
         rustc "./_.rs"
         ./_.exe
-    }:shell
+    }:ps
 }:moto
 
 runtime python {
@@ -27,7 +27,7 @@ runtime python {
         $something = @'[:block]'@
         $something | Out-File -FilePath "./_.py" -Encoding UTF8
         python "./_.py"
-    }:shell
+    }:ps
 }:moto
 
 runtime javascript {
@@ -36,7 +36,7 @@ runtime javascript {
         $something = @'[:block]'@
         $something | Out-File -FilePath "./_.js" -Encoding UTF8
         node "./_.js"
-    }:shell
+    }:ps
 }:moto
 
 
@@ -47,7 +47,7 @@ block developerCredits {
 
 task greet {
     start calc
-}:shell
+}:ps
 
 task greetings_from_dart {
         void main() {
