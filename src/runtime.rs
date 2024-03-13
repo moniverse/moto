@@ -122,9 +122,13 @@ async fn execute_task_code(
     variables: &[Variable],
     stdin: &mut tokio::process::ChildStdin,
 ) -> Result<(), String> {
-    for line in task.get_code().lines().map(|s|truncate_line(s, 50)).skip_while(|line| line.trim().is_empty()) {
-
-        showln!(yellow_bold, "╰", yellow_bold, "→ ", gray_dim, line);
+    for line in task.get_code().lines().skip_while(|line| line.trim().is_empty()) {
+        let displayable = truncate_line(line, 50);
+        if !displayable.is_empty() {
+            // showln!(yellow_bold, "↓ ", gray_dim, displayable);
+              showln!(yellow_bold, "⇣ ", gray_dim, displayable);
+        }
+       
 
         let line = inject_variables(line, variables);
         let line = inject_variables(&line, &[Variable::new("block", code.to_string())]);

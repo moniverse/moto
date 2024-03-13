@@ -126,7 +126,7 @@ pub fn display_selection_menu(
                     ).expect("Failed to clear terminal");
                     let title = filtered_choices[selected].get_title();
                     showln!(yellow_bold, "╭─ ", gray_dim, "running ", yellow_bold, title, yellow_bold, " ─",yellow_bold,"─".repeat(47 - title.len()));
-                    showln!(yellow_bold, "↓");
+                    // showln!(yellow_bold, "↓");
                     disable_raw_mode().expect("Failed to disable raw mode");
                     return Some(filtered_choices[selected].clone());
                 }
