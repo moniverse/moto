@@ -6,7 +6,6 @@ use crate::{get_runtime, get_variables};
 
 
 
-
 pub async fn execute(
     code: impl Into<String>,
     runtime: impl Into<String>,
@@ -25,9 +24,16 @@ pub async fn execute(
     // Inject variables into task code and actual code
     let variables = get_variables().await;
 
-    let mut child = Command::new("pwsh")
-        .arg("-NoProfile")
-        .arg("-Command")
+    let (command, arg) = match runtime.name().as_str() {
+        "shell" => ("sh", "-c"),
+        "powershell" | "ps" => ("pwsh", "-Command"),
+        _ => {
+            return Err(format!("Unsupported runtime: {}", runtime.name()));
+        }
+    };
+
+    let mut child = Command::new(command)
+        .arg(arg)
         .current_dir(&workspace)
         .arg("-") // Read command from stdin
         .stdin(std::process::Stdio::piped())
@@ -37,7 +43,7 @@ pub async fn execute(
         .expect("failed to execute child");
 
     let mut stdin = child.stdin.take().expect("failed to get stdin");
-    let stdout = child.stdout.take().expect("failed to get stdout"); 
+    let stdout = child.stdout.take().expect("failed to get stdout");
     let stderr = child.stderr.take().expect("failed to get stderr");
 
     let instance = std::time::Instant::now();
@@ -59,9 +65,6 @@ pub async fn execute(
         // Write the command to stdin
         stdin.write_all(line.as_bytes()).await.expect("failed to write to stdin");
         stdin.write_all(b"\n").await.expect("failed to write newline to stdin");
-        
-      
-       
     }
     
     // Close stdin to signal end of input
@@ -108,6 +111,8 @@ pub async fn execute(
 
     Ok("".into())
 }
+
+
 
 pub async fn get_workspace() -> String {
     let current_dir = std::env::current_dir().unwrap();
