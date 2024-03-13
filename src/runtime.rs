@@ -25,7 +25,7 @@ pub async fn execute(
     let variables = get_variables().await;
 
     let (command, arg) = match runtime.name().as_str() {
-        "shell" => ("sh", "-c"),
+        "shell" | "sh" => ("bash", "-c"),
         "powershell" | "ps" => ("pwsh", "-Command"),
         _ => {
             return Err(format!("Unsupported runtime: {}", runtime.name()));
