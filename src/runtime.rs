@@ -46,8 +46,11 @@ async fn execute_simple_runtime(
     let stderr = child.stderr.take().expect("failed to get stderr");
 
     for line in code.lines() {
-        let displayable = truncate_line(line, 20);
-        showln!(yellow_bold, "╰", white_bold, "→ ", gray_dim, displayable);
+        let displayable = truncate_line(line, 50);
+        if !displayable.is_empty() {
+            // showln!(yellow_bold, "↓ ", gray_dim, displayable);
+              showln!(yellow_bold, "⇣ ", gray_dim, displayable);
+        }
 
         write_to_stdin(&mut stdin, line).await?;
     }
