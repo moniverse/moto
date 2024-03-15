@@ -44,6 +44,20 @@ pub async fn get_runtimes() -> Vec<Runtime> {
         .collect()
 }
 
+pub async fn get_packages() -> Vec<Package> {
+    CTX.children
+        .clone()
+        .lock()
+        .await
+        .iter()
+        .filter_map(|cell| match cell {
+            Cell::Package(package) => Some(package.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+
 pub async fn get_tasks() -> Vec<Task> {
     CTX.children
         .clone()
@@ -93,6 +107,15 @@ pub async fn get_runtime(name: impl Into<String>) -> Option<Runtime> {
                     None
                 }
             }
+            Cell::Package(package) =>  {
+                 package.runtimes().iter().filter_map(|runtime| {
+                    if runtime.identifer.matches(&name) {
+                        Some(runtime.clone())
+                    } else {
+                        None
+                    }
+                }).next()
+            }
             _ => None,
         })
         .next()
@@ -114,6 +137,8 @@ pub async fn get_variable(name: impl Into<String>) -> Atom {
     Atom::Null
 }
 
+
+
 pub async fn set(cell: impl Into<Cell>) {
     CTX.children.clone().lock().await.push(cell.into());
 }
@@ -127,21 +152,25 @@ pub struct Ctx {
 impl Ctx {
     pub async fn display_options(&self) {
         let mut choices = vec![];
-        for task in get_tasks().await {
-            let task = task.clone();
-            choices.push(AsyncChoice::new(
-                task.name(),
-                format!("using {}", task.runtime()),
-                Arc::new(move || {
+        for package in get_packages().await {
+                for task in package.tasks() {
                     let task = task.clone();
-                    Pin::from(Box::new(async move {
-                        runtime::execute(task.get_code(), task.runtime(), "run".to_string())
-                            .await
-                            .unwrap();
-                    }))
-                }),
-            ));
+                    choices.push(AsyncChoice::new(
+                        task.name(),
+                        task.runtime(),
+                        Arc::new(move || {
+                            let task = task.clone();
+                            Pin::from(Box::new(async move {
+                                runtime::execute(task.get_code(), task.runtime(), "run".to_string())
+                                    .await
+                                    .unwrap();
+                            }))
+                        }),
+                        package.name().to_string(),
+                    ));
+                }
         }
+
 
         choices.push(AsyncChoice::new(
             "exit",
@@ -151,6 +180,7 @@ impl Ctx {
                     std::process::exit(0);
                 }))
             }),
+            "".to_string(),
         ));
 
         let configurations = get_configurations();
@@ -182,6 +212,7 @@ pub fn get_configurations() -> Vec<AsyncChoice> {
                     // }
                 }))
             }),
+            "".to_string(),
         ),
         AsyncChoice::new(
             "repositories",
@@ -195,6 +226,7 @@ pub fn get_configurations() -> Vec<AsyncChoice> {
                     // }
                 }))
             }),
+            "".to_string(),
         ),
     ]
 }

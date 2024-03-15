@@ -5,46 +5,13 @@ use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, ClearType, EnterAlternateScreen, LeaveAlternateScreen
 };
 use futures::Future;
+use std::collections::HashMap;
 use std::fmt::Result;
 use std::io::Write;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::fs;
-
-#[derive(Clone)]
-pub struct AsyncChoice {
-    name: String,
-    description: String,
-    action: Arc<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send>>>,
-}
-
-impl AsyncChoice {
-    pub fn new(
-        name: impl Into<String>,
-        description: impl Into<String>,
-        action: Arc<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send>>>,
-    ) -> Self {
-        AsyncChoice {
-            name: name.into(),
-            description: description.into(),
-            action,
-        }
-    }
-
-    pub async fn run(&self) {
-        let action = self.action.clone();
-        action().await;
-    }
-
-    pub fn get_title(&self) -> &str {
-        &self.name
-    }
-
-    pub fn get_description(&self) -> &str {
-        &self.description
-    }
-}
 
 const BANNER: &str = r#"
                                  __  
@@ -67,6 +34,55 @@ fn print_guidelines() {
 }
 
 
+#[derive(Clone)]
+pub struct AsyncChoice {
+    name: String,
+    description: String,
+    action: Arc<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send>>>,
+    file_path: String,
+}
+
+impl AsyncChoice {
+    pub fn new(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        action: Arc<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send>>>,
+        file_path: impl Into<String>,
+    ) -> Self {
+        AsyncChoice {
+            name: name.into(),
+            description: description.into(),
+            action,
+            file_path: file_path.into(),
+        }
+    }
+
+    pub async fn run(&self) {
+        let action = self.action.clone();
+        action().await;
+    }
+
+    pub fn get_title(&self) -> &str {
+        &self.name
+    }
+
+    pub fn get_description(&self) -> &str {
+        &self.description
+    }
+
+    pub fn get_file_path(&self) -> &str {
+        &self.file_path
+    }
+}
+
+impl PartialEq for AsyncChoice {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.file_path == other.file_path
+    }
+}
+
+
+
 pub async fn scan() -> std::io::Result<()> {
     let current_dir = std::env::current_dir().expect("Failed to get current directory");
 
@@ -74,15 +90,19 @@ pub async fn scan() -> std::io::Result<()> {
     for entry in glob::glob(&pattern).expect("Failed to read glob pattern") {
         match entry {
             Ok(path) => {
-                let content = fs::read_to_string(path).await?;
+                let content = fs::read_to_string(path.clone()).await?;
                 let script = ast::parse(&content);
+                let package_name =  //filename without extension
+                    path.file_stem().unwrap_or_default().to_str().unwrap_or_default();
+
                 match script {
                     Ok(script) => {
-                        for cell in script {
-                            set(cell).await;
-                        }
+                       set( Package::new(package_name, script)).await;
                     }
-                    Err(e) => eprintln!("Error parsing file: {:?}", e),
+                    Err(e) =>  {
+                        eprintln!("Error parsing file: {:?}", e);
+                        // set(Package::new(package_name, vec![]))
+                    }
                 }
             }
             Err(e) => eprintln!("Error reading file: {:?}", e),
@@ -90,6 +110,27 @@ pub async fn scan() -> std::io::Result<()> {
     }
     Ok(())
 }
+
+/// display selection menu
+/// displays a header with question "what do you want to do?"
+/// and a list of choices that the user can select from using the arrow keys and enter
+/// user can also search by typing the name of the choice and the list will be filtered moving the selected item to the top
+/// the search string is also diplayed in the bottom of the menu. backspace can be used to delete the last character
+/// user can exit the menu by pressing the escape key.
+
+
+fn filter_choices(choices: &[AsyncChoice], filter: &str) -> Vec<AsyncChoice> {
+    choices
+        .iter()
+        .filter(|choice| choice.name.to_lowercase().contains(&filter.to_lowercase()))
+        .cloned()
+        .collect()
+}
+
+
+
+
+
 
 /// display selection menu
 /// displays a header with question "what do you want to do?"
@@ -235,9 +276,13 @@ fn print_menu(header: &str, choices: &[AsyncChoice], selected: usize, search_tex
                     "│",
                     yellowbg,
                     format!(" {} ", choice.get_title()),
-                    white,
-                    " ",
+                    gray_dim,
+                    "|",
                     yellow_bold,
+                    choice.get_file_path(),
+                    gray_dim,
+                    "|",
+                    cyan_bold,
                     choice.get_description()
                 );
             }
@@ -258,11 +303,11 @@ fn print_menu(header: &str, choices: &[AsyncChoice], selected: usize, search_tex
                     yellow_bold,
                     "│",
                     white,
-                    format!(" {} ", choice.get_title())
-                    // white,
-                    // " ",
-                    // gray_dim,
-                    // choice.get_description()
+                    format!(" {}", choice.get_title()),
+                    gray_dim,
+                    "|",
+                    gray_dim,
+                    choice.get_file_path()
                 );
             }
         }
@@ -289,10 +334,3 @@ fn print_menu(header: &str, choices: &[AsyncChoice], selected: usize, search_tex
     ).expect("Failed to clear terminal");
 }
 
-fn filter_choices(choices: &[AsyncChoice], filter: &str) -> Vec<AsyncChoice> {
-    choices
-        .iter()
-        .filter(|choice| choice.name.to_lowercase().contains(&filter.to_lowercase()))
-        .cloned()
-        .collect()
-}

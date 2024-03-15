@@ -179,6 +179,12 @@ impl std::fmt::Display for Package {
     }
 }
 
+impl Into<Cell> for Package {
+    fn into(self) -> Cell {
+        Cell::Package(self)
+    }
+}
+
 impl Package {
     pub fn new(identifer: impl Into<String>, children: Vec<Cell>) -> Self {
         Self {
@@ -194,6 +200,57 @@ impl Package {
 
     pub fn name(&self) -> String {
         self.identifer.0.clone()
+    }
+
+    pub fn tasks(&self) -> Vec<Task> {
+        self.children
+            .iter()
+            .filter_map(|cell| match cell {
+                Cell::Task(task) => Some(task.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+
+    pub fn runtimes(&self) -> Vec<Runtime> {
+        self.children
+            .iter()
+            .filter_map(|cell| match cell {
+                Cell::Runtime(runtime) => Some(runtime.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub fn blocks(&self) -> Vec<Block> {
+        self.children
+            .iter()
+            .filter_map(|cell| match cell {
+                Cell::Block(block) => Some(block.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub fn imports(&self) -> Vec<Import> {
+        self.children
+            .iter()
+            .filter_map(|cell| match cell {
+                Cell::Import(import) => Some(import.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub fn packages(&self) -> Vec<Package> {
+        self.children
+            .iter()
+            .filter_map(|cell| match cell {
+                Cell::Package(package) => Some(package.clone()),
+                _ => None,
+            })
+            .collect()
     }
 }
 
