@@ -55,23 +55,227 @@ fn test_parse_cells() {
 /// a cell can be a task, a runtime, a block, a variable etc
 /// cells can be nested and can contain other cells
 pub fn parse_cell(input: &str) -> IResult<&str, Cell> {
-    alt((
-        map(parse_assignment, Cell::Assignment),
-        map(parse_task, Cell::Task),
-        map(parse_runtime, Cell::Runtime),
-        map(parse_block, Cell::Block),
-        map(parse_import, Cell::Import),
-    ))(input)
+
+    let (input, cell) = delimited(
+        ignore_comments_and_spaces,
+        alt((
+            map(parse_assignment, Cell::Assignment),
+            map(parse_task, Cell::Task),
+            map(parse_runtime, Cell::Runtime),
+            map(parse_block, Cell::Block),
+            map(parse_import, Cell::Import),
+        )),
+        ignore_comments_and_spaces,
+    )(input)?;
+
+    Ok((input,cell))
+
+
 }
+
+
 
 pub fn parse_cells(input: &str) -> IResult<&str, Vec<Cell>> {
     many0(parse_cell)(input)
 }
 
 #[test]
+fn test_parse_package() {
+    let input = r#"
+        package rust { // this is a comment
+            let version = "1.0.0";
+
+            runtime rust {
+                let version = "1.0.0";
+                let path = "path/to/rust.exe";
+
+                task build {
+                    echo "Building with rust"
+                    [:path] --version
+                    [:path] run [:file]
+                }:shell
+            }:moto
+        }:moto
+        "#;
+
+    let (input, result) = parse_package(input).unwrap();
+    assert_eq!(
+        result,
+        Package {
+            identifer: Identifier::new("rust"),
+            children: vec![
+                Cell::Assignment(Assignment::new("version", "1.0.0")),
+                Cell::Runtime(Runtime {
+                    identifer: Identifier::new("rust"),
+                    children: vec![
+                        Cell::Assignment(Assignment::new("version", "1.0.0")),
+                        Cell::Assignment(Assignment::new("path", "path/to/rust.exe")),
+                        Cell::Task(Task {
+                            identifer: Identifier::new("build"),
+                            body: "echo \"Building with rust\" [:path] --version [:path] run [:file]".to_string(),
+                            runtime: Identifier::new("shell")
+                        })
+                    ],
+                    runtime: "moto".into()
+                })
+            ],
+            runtime: "moto".into()
+        }
+    );
+}
+
+
+#[test]
+fn test_comments_and_spaces() {
+    let input = r#"
+        // this is a comment
+        /* this is a block comment */
+        "#;
+
+    let result = ignore_comments_and_spaces(input).unwrap();
+    assert_eq!(result, ("", ""));
+}
+
+#[test]
+fn test_ignore_comments_everywhere() {
+    let input = r#"
+    // this is a comment
+        package rust { // this is a comment
+            let version = "1.0.0";  // this is a comment
+            runtime rust { // this is a comment
+                let version = "1.0.0"; // this is a comment
+                let path = "path/to/rust.exe"; // this is a comment
+                task build {
+                    echo "Building with rust"
+                    [:path] --version 
+                    [:path] run [:file] 
+                }:shell // this is a comment
+            }:moto // this is a comment
+        }:moto
+        "#;
+
+    let result = parse_package(input).unwrap();
+    result.0.println(in_cyan);
+    result.1.println(in_yellow);
+
+
+    let input = r#"
+    
+// moto script v2.0
+// moto scripts are written in a simple language that is easy to understand and write
+// a moto script is broken down into a collection of cells. cells are the basic building blocks of a moto script
+// a cell can be a package,runtime or a task
+// a task is a sequence of commands that are executed in order one line at a time using the runtime specified at its tail
+
+
+task greet {
+    echo "hello world"
+}:ps
+
+// tasks can be defined in any runtime , provided the runtime's definition is available to the moto runtime
+// let's define a task in the dart runtime
+task greet_from_dart {
+    print("hello world");
+}:dart
+
+// a runtime is a collection of tasks and variables that are used to execute a task
+"#;
+    let result = parse_cells(input).unwrap();
+    result.0.println(in_cyan);
+    for cell in result.1 {
+        cell.println(in_yellow);
+    }
+
+
+
+}
+
+
+
+// comments can be single line or multi line
+// single line comments start with // and end with a newline
+// multi line comments start with /* and end with */ and can span multiple lines
+// comments can appear anywhere in the script and are ignored by the parser
+// comments can also appear at the end of a line and are ignored by the parser
+// linebreaks after a comment are also ignored by the parser until a non comment character is encountered
+pub fn comment(input: &str) -> IResult<&str, &str> {
+    alt((single_line_comment, multi_line_comment))(input)
+}
+
+pub fn single_line_comment(input: &str) -> IResult<&str, &str> {
+
+    let (input, _) = tag("//")(input)?;
+    let (input, _) = take_till(|c| c == '\n')(input)?;
+    let (input, _) = char('\n')(input)?;
+    let (input, _) = multispace0(input)?;
+    Ok((input, ""))
+}
+
+pub fn multi_line_comment(input: &str) -> IResult<&str, &str> {
+    let (input, _) = tag("/*")(input)?;
+    let (input, _) = take_until("*/")(input)?;
+    let (input, _) = tag("*/")(input)?;
+    let (input, _) = multispace0(input)?;
+    Ok((input, ""))
+}
+
+pub fn comments(input: &str) -> IResult<&str, &str> {
+    let (input, _) = multispace0(input)?;
+    let (input, _) = many0(comment)(input)?;
+    let (input, _) = multispace0(input)?;
+    Ok((input, ""))
+}
+
+// captures and ignores optional comments and spaces until end of comment or space
+pub fn ignore_comments_and_spaces(input: &str) -> IResult<&str, &str> {
+    let (input, _) = multispace0(input)?;
+    let (input, _) = opt(comments)(input)?;
+    let (input, _) = multispace0(input)?;
+    Ok((input, ""))
+}
+
+pub fn parse_package(input: &str) -> IResult<&str, Package> {
+
+        let (input, _) = ignore_comments_and_spaces(input)?;
+        let (input, _) = tag("package")(input)?;
+        let (input, _) = multispace1(input)?;
+        let (input, identifier) = parse_identifier(input)?;
+        let (input, _) = ignore_comments_and_spaces(input)?;
+        let (input, _) = char('{')(input)?;
+        let (input, _) = ignore_comments_and_spaces(input)?;
+    
+        // Parse children (assignments or tasks) until the closing tag of the runtime block
+        let (input, children) = many0(alt((
+            map(parse_assignment, Cell::Assignment),
+            map(parse_task, Cell::Task),
+            map(parse_runtime, Cell::Runtime),
+            map(parse_block, Cell::Block),
+            map(parse_import, Cell::Import),
+
+        )))(input)?;
+    
+        let (input, _) = ignore_comments_and_spaces(input)?;
+        let (input, _) = tag("}:")(input)?;
+        let (input, runtime) = parse_identifier(input)?;
+        let (input, _) = ignore_comments_and_spaces(input)?;
+        let (input, _) = opt(eof)(input)?; // Optional EOF to ensure parsing until the end of input
+    
+        Ok((
+            input,
+            Package {
+                identifer: identifier,
+                children,
+                runtime,
+            },
+        ))
+    
+}
+
+
+#[test]
 fn test_parse_assignment() {
     let input = r#"
-        let x = 5;
+        let x = 5; // this is a comment
         let y = "hello";
         let z = true;
         "#;
@@ -105,15 +309,15 @@ fn test_parse_assignment() {
 }
 
 pub fn parse_assignment(input: &str) -> IResult<&str, Assignment> {
-    let (input, _) = multispace0(input)?;
+    let (input, _) = ignore_comments_and_spaces(input)?;
     let (input, _) = tag("let")(input)?;
     let (input, _) = multispace1(input)?;
     let (input, identifer) = parse_identifier(input)?;
-    let (input, _) = multispace0(input)?;
+    let (input, _) = ignore_comments_and_spaces(input)?;
     let (input, _) = char('=')(input)?;
-    let (input, _) = multispace0(input)?;
+    let (input, _) = ignore_comments_and_spaces(input)?;
     let (input, value) = parse_atom(input)?;
-    let (input, _) = multispace0(input)?;
+    let (input, _) = ignore_comments_and_spaces(input)?;
     let (input, _) = char(';')(input)?;
     Ok((
         input,
@@ -157,11 +361,11 @@ fn test_parse_task() {
 }
 
 pub fn parse_task(input: &str) -> IResult<&str, Task> {
-    let (input, _) = multispace0(input)?;
+    let (input, _) = ignore_comments_and_spaces(input)?;
     let (input, _) = tag("task")(input)?;
     let (input, _) = multispace1(input)?;
     let (input, identifier) = parse_identifier(input)?;
-    let (input, _) = multispace0(input)?;
+    let (input, _) = ignore_comments_and_spaces(input)?;
     let (input, _) = tag("{")(input)?;
     let (input, body) = take_until("}:")(input)?;
     // Ensure that the closing tag is consumed by the task parser
@@ -181,7 +385,7 @@ pub fn parse_task(input: &str) -> IResult<&str, Task> {
 #[test]
 fn test_parse_runtime() {
     let input = r#"
-        runtime dart {
+        runtime dart { // this is a comment
             let version = "3.7.0";
             let path = "path/to/dart.exe";
 
@@ -215,13 +419,13 @@ fn test_parse_runtime() {
 }
 
 pub fn parse_runtime(input: &str) -> IResult<&str, Runtime> {
-    let (input, _) = multispace0(input)?;
+    let (input, _) = ignore_comments_and_spaces(input)?;
     let (input, _) = tag("runtime")(input)?;
     let (input, _) = multispace1(input)?;
     let (input, identifier) = parse_identifier(input)?;
-    let (input, _) = multispace0(input)?;
+    let (input, _) = ignore_comments_and_spaces(input)?;
     let (input, _) = char('{')(input)?;
-    let (input, _) = multispace0(input)?;
+    let (input, _) = ignore_comments_and_spaces(input)?;
 
     // Parse children (assignments or tasks) until the closing tag of the runtime block
     let (input, children) = many0(alt((
@@ -229,10 +433,10 @@ pub fn parse_runtime(input: &str) -> IResult<&str, Runtime> {
         map(parse_task, Cell::Task),
     )))(input)?;
 
-    let (input, _) = multispace0(input)?;
+    let (input, _) = ignore_comments_and_spaces(input)?;
     let (input, _) = tag("}:")(input)?;
     let (input, runtime) = parse_identifier(input)?;
-    let (input, _) = multispace0(input)?;
+    let (input, _) = ignore_comments_and_spaces(input)?;
     let (input, _) = opt(eof)(input)?; // Optional EOF to ensure parsing until the end of input
 
     Ok((
@@ -244,7 +448,7 @@ pub fn parse_runtime(input: &str) -> IResult<&str, Runtime> {
 #[test]
 fn test_parse_block() {
     let input = r#"
-        block developerCredits { developed by incredimo for xo.rs }:text
+        block developerCredits { developed by incredimo for xo.rs }:text // this is a comment
         "#;
 
     let (input, result) = parse_block(input).unwrap();
@@ -257,11 +461,11 @@ fn test_parse_block() {
 pub fn parse_block(input: &str) -> IResult<&str, Block> {
     //first we will take the outer frame
     let mut task_parser = tuple((
-        multispace0,
+        ignore_comments_and_spaces,
         tag("block"),
         multispace1,
         parse_identifier,
-        multispace0,
+        ignore_comments_and_spaces,
         tag("{"),
         take_until("}:"),
         tag("}:"),
@@ -278,7 +482,7 @@ pub fn parse_block(input: &str) -> IResult<&str, Block> {
 #[test]
 fn test_parse_import() {
     let input = r#"
-        import "math.moto" as math
+        import "math.moto" as math // this is a comment
         "#;
 
     let (input, result) = parse_import(input).unwrap();
@@ -289,11 +493,11 @@ fn test_parse_import() {
 }
 
 pub fn parse_import(input: &str) -> IResult<&str, Import> {
-    let (input, _) = multispace0(input)?;
+    let (input, _) = ignore_comments_and_spaces(input)?;
     let (input, _) = tag("import")(input)?;
     let (input, _) = multispace1(input)?;
     let (input, path) = parse_string(input)?;
-    let (input, _) = multispace0(input)?;
+    let (input, _) = ignore_comments_and_spaces(input)?;
     let (input, _) = tag("as")(input)?;
     let (input, _) = multispace1(input)?;
     let (input, alias) = parse_identifier(input)?;
@@ -433,7 +637,7 @@ pub fn parse_variable_atom(input: &str) -> IResult<&str, Variable> {
 }
 
 pub fn parse_binary_operator(input: &str) -> IResult<&str, Operator> {
-    let (input, _) = multispace0(input)?;
+    let (input, _) = ignore_comments_and_spaces(input)?;
     let (input, operator) = alt((
         tag("+"),
         tag("-"),
@@ -448,7 +652,7 @@ pub fn parse_binary_operator(input: &str) -> IResult<&str, Operator> {
         tag("&&"),
         tag("||"),
     ))(input)?;
-    let (input, _) = multispace0(input)?;
+    let (input, _) = ignore_comments_and_spaces(input)?;
     Ok((
         input,
         Operator {
@@ -540,7 +744,7 @@ pub fn parse_object(input: &str) -> IResult<&str, Object> {
 }
 
 pub fn parse_key_value_pair(input: &str) -> IResult<&str, (String, Atom)> {
-    let (input, _) = multispace0(input)?;
+    let (input, _) = ignore_comments_and_spaces(input)?;
     let (input, key) = is_not(":")(input)?;
     let (input, _) = char(':')(input)?;
     let (input, value) = parse_atom(input)?;

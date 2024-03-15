@@ -25,6 +25,9 @@ pub enum Cell {
     //e.g `import "math.moto" as math`
     #[display(fmt = "import [:path] as [:alias]")]
     Import(Import),
+    ///package is used to define a package
+    /// a package has multiple cells    
+    Package(Package),
 }
 
 impl Cell {
@@ -35,6 +38,7 @@ impl Cell {
             Cell::Runtime(runtime) => Some(runtime.identifer.clone()),
             Cell::Block(block) => Some(block.identifer.clone()),
             Cell::Import(import) => Some(import.alias.clone()),
+            Cell::Package(package) => Some(package.identifer.clone()),
         }
     }
 
@@ -45,6 +49,7 @@ impl Cell {
             Cell::Runtime(runtime) => runtime.identifer.0.clone(),
             Cell::Block(block) => block.identifer.0.clone(),
             Cell::Import(import) => import.alias.0.clone(),
+            Cell::Package(package) => package.identifer.0.clone(),
         }
     }
 
@@ -55,6 +60,7 @@ impl Cell {
             Cell::Runtime(_) => "runtime".to_string(),
             Cell::Block(_) => "block".to_string(),
             Cell::Import(_) => "import".to_string(),
+            Cell::Package(_) => "package".to_string(),
         }
     }
 
@@ -65,6 +71,7 @@ impl Cell {
             Cell::Runtime(runtime) =>  format!("runtime {} with runtime {}", runtime.identifer, runtime.runtime),
             Cell::Block(block) =>  format!("block {} with runtime {}", block.identifer, block.runtime),
             Cell::Import(import) =>  format!("import {} as {}", import.path, import.alias),
+            Cell::Package(package) =>  format!("package {}", package.identifer),
         }
     }
 
@@ -75,6 +82,7 @@ impl Cell {
             Cell::Runtime(runtime) => runtime.identifier_is(name),
             Cell::Block(block) => block.identifier_is(name),
             Cell::Import(import) => import.alias.matches(name),
+            Cell::Package(package) => package.identifier_is(name),
         }
     }
 
@@ -126,6 +134,16 @@ impl Cell {
         })
     }
 
+    pub fn package(identifer: impl Into<String>, children: Vec<Cell>) -> Self {
+        Cell::Package(Package {
+            identifer: Identifier(identifer.into()),
+            children,
+            runtime: Identifier("moto".to_string()),
+        })
+    }
+
+
+
     pub fn import(path: impl Into<String>, alias: impl Into<String>) -> Self {
         Cell::Import(Import {
             path: path.into(),
@@ -134,6 +152,49 @@ impl Cell {
     }
 
 
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+///packages are used to define a package
+/// a package has multiple cells
+/// e.g `package math { let x = 5; let y = 10; }`
+/// or `package math { task greet { echo "hello world" }:shell }`
+/// or `package math { runtime dart { let version = "3.7.0" }:shell }`
+/// or `package math { block developerCredits { developed by incredimo for xo.rs }:text }`
+/// or `package math { import "math.moto" as math }`
+
+pub struct Package {
+    pub identifer: Identifier,
+    pub children: Vec<Cell>,
+    pub runtime: Identifier,
+}
+
+impl std::fmt::Display for Package {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "package {} {{\n", self.identifer.0)?;
+        for child in &self.children {
+            write!(f, "{}\n", child)?;
+        }
+        write!(f, "}}")
+    }
+}
+
+impl Package {
+    pub fn new(identifer: impl Into<String>, children: Vec<Cell>) -> Self {
+        Self {
+            identifer: Identifier(identifer.into()),
+            children,
+            runtime: Identifier("moto".to_string()),
+        }
+    }
+
+    pub fn identifier_is(&self, name:  impl Into<String>) -> bool {
+        self.identifer.matches(name)
+    }
+
+    pub fn name(&self) -> String {
+        self.identifer.0.clone()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Display)]

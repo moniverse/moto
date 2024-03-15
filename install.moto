@@ -1,0 +1,154 @@
+
+// moto script v2.0
+// moto scripts are written in a simple language that is easy to understand and write
+// a moto script is broken down into a collection of cells. cells are the basic building blocks of a moto script
+// a cell can be a package,runtime or a task
+// a task is a sequence of commands that are executed in order one line at a time using the runtime specified at its tail
+// for example `task some_task{ echo "hello world" }:ps` is a task cell. the tail of the cell is `:ps` which specifies the runtime to be used for executing the task
+task greet {
+    echo "hello world"
+}:ps
+
+// tasks can be defined in any runtime , provided the runtime's definition is available to the moto runtime
+// let's define a task in the dart runtime
+task greet_from_dart {
+    print("hello world");
+}:dart
+
+// the above task will be executed using the dart runtime.
+// however, for this to work, we should define the dart runtime in the script like below
+runtime dart {
+    // the definition of the dart runtime
+    // runtimes are a collection of tasks that are required to handle execution of its dependent tasks
+    // for example, the dart runtime should have a task that can execute a dart script
+    // this is always 'run' task
+    // notice that the task itself has a tail that specifies the runtime to be used for executing that particular task
+
+    task run {
+        # inside a task you can write any code that you want to run in the language of the runtime
+        # for example here the code is written in powershell. that is why
+        $something = @'[:block]'@
+        $something | Out-File -FilePath "./_.dart" -Encoding UTF8
+        dart run "./_.dart"
+    }:ps
+
+    // a runtime can have any number of tasks
+    // for example, the dart runtime can have a task that can compile a dart script to a binary
+    task compile {
+        something = @'[:block]'@
+        something | Out-File -FilePath "./_.dart" -Encoding UTF8
+        dart compile "./_.dart" --output="./_.exe" 
+    }:ps
+
+    // the above task can be invoked on greeting_from_dart task by calling `[:greet_from_dart(compile)]`
+    // similarly, the run task can be invoked on greeting_from_dart task by calling `[:greet_from_dart(run)]`
+    // since `run` is the default task for the dart runtime, we can also call `[:greet_from_dart()]` and it will be executed using the `run` task
+    // we dont need to specify the runtime for the task to be executed as runtime for execution of a task is defined in the task itself (the tail of the task)
+
+}:moto // the runtime is defined in moto language (the code inside the curly braces is written in moto language)
+
+
+
+// Global Variables Documentation
+// Moto scripts support global variables which are accessible from any part of the script, regardless of the runtime.
+// Variables are declared using the 'let' command and can be used within tasks by enclosing the variable name in '[: ]'.
+// Example: Declaring and using a global variable
+let greeting = "Hello from Moto";
+task useGlobalVariable {
+    echo "[:greeting]"; # Outputs: Hello from Moto
+}:ps
+
+// Task Execution with Global Variables
+// Tasks can seamlessly use global variables, simplifying data sharing between different parts of the script.
+// This feature enables dynamic task execution based on globally shared state or configurations.
+
+// Best Practices for Task and Variable Management
+// - Use clear, descriptive names for tasks and variables.
+// - Minimize the use of global variables to reduce side effects and improve script readability.
+// - Organize related tasks into packages or runtime groups for better maintainability.
+
+
+// a package is a collection of cells
+// a package can be used to group related cells together,use them in a particular fashion or to share them with others
+// a package can be imported into another package or script using the `import` command (in moto language)
+// eg: `use dart from "./dart.moto"` will import the dart package from the file `dart.moto` into the current package or script
+package rust {
+    // a package can contain any number of cells
+    // for example, a package can contain a runtime
+    runtime rust {
+        // the definition of the rust runtime
+        // runtimes are a collection of tasks that are required to handle execution of its dependent tasks
+        // for example, the rust runtime should have a task that can execute a rust script
+        // this is always 'run' task
+        // notice that the task itself has a tail that specifies the runtime to be used for executing that particular task
+
+        task run {
+            # inside a task you can write any code that you want to run in the language of the runtime
+            # for example here the code is written in powershell. that is why
+            $something = @'[:block]'@
+            $something | Out-File -FilePath "./_.rs" -Encoding UTF8
+            rustc "./_.rs" -o "./_.exe"
+            "./_.exe"
+        }:ps
+
+        // a runtime can have any number of tasks
+        // for example, the rust runtime can have a task that can compile a rust script to a binary
+        task compile {
+            something = @'[:block]'@
+            something | Out-File -FilePath "./_.rs" -Encoding UTF8
+            rustc "./_.rs" -o "./_.exe"
+        }:ps
+
+        // the above task can be invoked on greeting_from_dart task by calling `[:greet_from_dart(compile)]`
+        // similarly, the run task can be invoked on greeting_from_dart task by calling `[:greet_from_dart(run)]`
+        // since `run` is the default task for the rust runtime, we can also call `[:greet_from_dart()]` and it will be executed using the `run` task
+        // we dont need to specify the runtime for the task to be executed as runtime for execution of a task is defined in the task itself (the tail of the task)
+
+    }:moto // the runtime is defined in moto language (the code inside the curly braces is written in moto language)
+
+    // more about moto language
+    // moto language is a simple language that is easy to understand and write
+    // other than the cells, the moto language has a few commands that fecilitate manipulation of cells and their execution
+    // in hopes of avoiding ambiguity, these commands end with a `;`
+    // they are as follows:
+    // 1. import -
+    //    use command is used to import a package into the current package or script
+    //    eg: `import math as m` will import the package `math` from the file `math.moto` into the current package or script and it can be accessed using the alias `m`
+    //    aliases are optional and if not provided, the package will be imported and in an exposed state. that is, the cells of the imported package can be accessed directly
+    //    eg: `import math` will import the package `math` from the file `math.moto` such taht we can call `[:pi]` directly. if we use an alias, we will have to call `[:m:pi]`
+    import math as m;
+    // 2. let -
+    //    let command is used to define a variable in the current package or script
+    //    eg: `let x = 10;` will define a variable `x` with value `10`
+    //    variables can be used anywhere in the script (in any language) using the `[:variable_name]` syntax
+    //    eg: `echo "[:x]"` will print `10` even if the echo command is written in a different runtime (powershell in this case)
+    //    moto has support for all the basic data types like string `"some string"`, number `10`, boolean `true` and `false` arrays `["a","b","c"]` objects `{a:10,b:"hello",c:true}` and null `null`
+    //    let commands are mostly used to support configuration of the script or to share values between different runtimes
+    let version = "1.0.0";
+
+
+    // packages are often used to group more functionalities like installing runtime dependencies (eg: installing rust sdk itself into the host machine)
+    task install {
+        wget "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe" -OutFile "rustup-init.exe"
+        .\rustup-init.exe -y
+        $env:Path += ";C:\Users\runneradmin\.cargo\bin"
+    }:ps
+
+    // the above task can be invoked by calling `[:install()]` within the package or `[:rust:install()]` from outside the package
+    // notice that we cannot call compile or run tasks from outside the package as they are not defined in the package itself
+    // only direct children of the package can be accessed from outside the package. we can access runtime from outside the package as it is a direct child of the package
+    // if we `import rust as r` then we can access the install task as `[:r:install()]` and the run task as `[:r:run()]` and so on
+    // similarly, in tails we would have to use `:r:rust` instead of `:rust` and so on. for this reason, it is often a good practice to not use aliases for packages
+    // if we dont use aliases, we can access the cells of the package directly. for example, we can access the install task as `[:install()]` and the run task as `[:run()]` and so on
+    // similarly, in tails we can use `:rust` instead of `:r:rust` which is more readable and less error prone
+
+
+}:moto // the package is defined in moto language (the code inside the curly braces is written in moto language)
+
+
+
+
+
+
+
+
