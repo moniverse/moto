@@ -10,6 +10,7 @@ use std::io::Write;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::fs;
 
 #[derive(Clone)]
 pub struct AsyncChoice {
@@ -66,6 +67,29 @@ fn print_guidelines() {
 }
 
 
+pub async fn scan() -> std::io::Result<()> {
+    let current_dir = std::env::current_dir().expect("Failed to get current directory");
+
+    let pattern = format!("{}/*.moto", current_dir.to_str().unwrap());
+    for entry in glob::glob(&pattern).expect("Failed to read glob pattern") {
+        match entry {
+            Ok(path) => {
+                let content = fs::read_to_string(path).await?;
+                let script = ast::parse(&content);
+                match script {
+                    Ok(script) => {
+                        for cell in script {
+                            set(cell).await;
+                        }
+                    }
+                    Err(e) => eprintln!("Error parsing file: {:?}", e),
+                }
+            }
+            Err(e) => eprintln!("Error reading file: {:?}", e),
+        }
+    }
+    Ok(())
+}
 
 /// display selection menu
 /// displays a header with question "what do you want to do?"

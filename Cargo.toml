@@ -1,6 +1,6 @@
 [package]
 name = "moto"
-version = "0.1.17"
+version = "0.1.18"
 edition = "2021"
 authors = ["incredimo <a@xo.rs>"]
 description = "moto - motivated automation"
@@ -42,6 +42,7 @@ codegen-units = 1
 opt-level = 3
 debug = false
 panic = "abort"
+
 
 
 

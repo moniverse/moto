@@ -9,7 +9,7 @@ use std::io::Write;
 use std::pin::Pin;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
-use tokio::fs;
+
 use tokio::sync::Mutex;
 
 use minimo::*;
@@ -201,29 +201,6 @@ pub fn get_configurations() -> Vec<AsyncChoice> {
 
 
 
-pub async fn scan() -> std::io::Result<()> {
-    let current_dir = std::env::current_dir().expect("Failed to get current directory");
-
-    let pattern = format!("{}/*.moto", current_dir.to_str().unwrap());
-    for entry in glob::glob(&pattern).expect("Failed to read glob pattern") {
-        match entry {
-            Ok(path) => {
-                let content = fs::read_to_string(path).await?;
-                let script = ast::parse(&content);
-                match script {
-                    Ok(script) => {
-                        for cell in script {
-                            set(cell).await;
-                        }
-                    }
-                    Err(e) => eprintln!("Error parsing file: {:?}", e),
-                }
-            }
-            Err(e) => eprintln!("Error reading file: {:?}", e),
-        }
-    }
-    Ok(())
-}
 
 
 pub fn get_local_repository_path(name: &str) -> std::path::PathBuf {

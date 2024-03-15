@@ -36,7 +36,7 @@ async fn  main() {
 
 pub async fn start() {
 let args: Vec<String> = env::args().collect();
-moto::ctx::scan().await.unwrap();
+moto::menu::scan().await.unwrap();
 get_ctx().display_options().await;
 }
 
