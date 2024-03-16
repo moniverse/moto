@@ -1,0 +1,39 @@
+
+task bump {
+cd ..
+$versionParts = $versionLine.Split('.')
+$major = $versionParts[0]
+$minor = $versionParts[1]
+$patch = [int]$versionParts[2]
+
+
+$patch += 1
+
+# Construct the new version string
+$newVersion = "$major.$minor.$patch"
+$newCargoTomlContent = $cargoTomlContent -replace ('version = "' + [regex]::Escape($versionLine) + '"'), ('version = "' + $newVersion + '"')
+Set-Content -Path $cargoTomlPath -Value $newCargoTomlContent
+
+Write-Output "✅ Updated version to $newVersion in Cargo.toml"
+
+$publishDate = Get-Date -Format "yyyy-MM-dd"
+
+$commitMessage = "🚀 Bump version to $newVersion ($publishDate)"
+$releaseMessage = "Release v$newVersion ($publishDate)"
+
+git add .
+
+git commit -m "$commitMessage"
+
+git tag -a "v$newVersion" -m "$releaseMessage"
+
+Write-Output "🎉 Pushing changes and tags to the repository..."
+git push && git push --tags
+
+Write-Output "📦 Publishing package to crates.io..."
+cargo publish
+
+if ($LASTEXITCODE -eq 0) { Write-Output "✨ Package successfully published to crates.io!" } else { Write-Output "❌ Failed to publish package to crates.io."}
+
+Write-Output "🎉 Release v$newVersion completed!"
+}:ps
