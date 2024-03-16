@@ -61,7 +61,7 @@ git push && git push --tags
 
 # Publish the package to crates.io
 Write-Output "📦 Publishing package to crates.io..."
-cargo publish
+cargo publish --quiet
 
 if ($LASTEXITCODE -eq 0) {
     Write-Output "✨ Package successfully published to crates.io!"
