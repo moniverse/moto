@@ -252,6 +252,22 @@ impl Package {
             })
             .collect()
     }
+    
+    pub fn get_task(&self, task_name: &str) -> Option<Task> {
+        self.children
+            .iter()
+            .filter_map(|cell| match cell {
+                Cell::Task(task) => {
+                    if task.identifier_is(task_name) {
+                        Some(task.clone())
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            })
+            .next()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Display)]
@@ -294,6 +310,7 @@ pub struct Task {
     pub body:  String,
     pub runtime: Identifier,
 }
+
 
 impl Task {
     pub fn new(identifer: impl Into<String>, body: impl Into<String>, runtime: impl Into<String>) -> Self {
@@ -675,6 +692,15 @@ pub struct Variable {
     pub value: Atom,
 }
 
+impl Into<Cell> for Variable {
+    fn into(self) -> Cell {
+        Cell::Assignment(Assignment {
+            identifier: self.identifier,
+            value: self.value,
+        })
+    }
+}
+
 impl Variable {
     pub fn new(identifier: impl Into<String> , value : impl Into<Atom>) -> Self {
         Self {
@@ -700,6 +726,10 @@ impl Variable {
         } else {
             Some(self.value.clone())
         }
+    }
+
+    pub fn get_value_str(&self) -> String {
+        self.value.to_string()
     }
 
     pub fn identifier_is(&self, name:  impl Into<String>) -> bool {

@@ -26,7 +26,6 @@ pub async fn get_children() -> Vec<Cell> {
     CTX.children.clone().lock().await.clone()
 }
 
-
 pub async fn get_variables() -> Vec<Variable> {
     CTX.variables.clone().lock().await.clone()
 }
@@ -57,18 +56,18 @@ pub async fn get_packages() -> Vec<Package> {
         .collect()
 }
 
-
 pub async fn get_tasks() -> Vec<Task> {
-    CTX.children
-        .clone()
-        .lock()
-        .await
-        .iter()
-        .filter_map(|cell| match cell {
-            Cell::Task(task) => Some(task.clone()),
-            _ => None,
-        })
-        .collect()
+   let mut tasks = vec![];
+   for tsk in CTX.children.clone().lock().await.iter() {
+       match tsk {
+           Cell::Task(task) => tasks.push(task.clone()),
+           _ => {}
+       }
+    }
+    for package in get_packages().await {
+        tasks.extend(package.tasks());
+    }
+    tasks
 }
 
 pub async fn get_task(name: impl Into<String>) -> Option<Task> {
@@ -107,15 +106,17 @@ pub async fn get_runtime(name: impl Into<String>) -> Option<Runtime> {
                     None
                 }
             }
-            Cell::Package(package) =>  {
-                 package.runtimes().iter().filter_map(|runtime| {
+            Cell::Package(package) => package
+                .runtimes()
+                .iter()
+                .filter_map(|runtime| {
                     if runtime.identifer.matches(&name) {
                         Some(runtime.clone())
                     } else {
                         None
                     }
-                }).next()
-            }
+                })
+                .next(),
             _ => None,
         })
         .next()
@@ -137,6 +138,43 @@ pub async fn get_variable(name: impl Into<String>) -> Atom {
     Atom::Null
 }
 
+// pub async fn get_options() -> Vec<AsyncChoice> {
+//     let mut choices = vec![];
+//     for package in get_packages().await {
+//         for task in package.tasks() {
+//             let task = task.clone();
+//             choices.push(AsyncChoice::new(
+//                 task.name(),
+//                 task.runtime(),
+//                 Arc::new(move || {
+//                     let task = task.clone();
+//                     Pin::from(Box::new(async move {
+//                         runtime::execute(task.get_code(), task.runtime(), "run".to_string())
+//                             .await
+//                             .unwrap();
+//                     }))
+//                 }),
+//                 package.name().to_string(),
+//             ));
+//         }
+//     }
+
+//     choices.push(AsyncChoice::new(
+//         "exit",
+//         "exit the program",
+//         Arc::new(move || {
+//             Pin::from(Box::new(async move {
+//                 std::process::exit(0);
+//             }))
+//         }),
+//         "".to_string(),
+//     ));
+
+//     choices
+// }
+
+
+
 
 
 pub async fn set(cell: impl Into<Cell>) {
@@ -150,46 +188,6 @@ pub struct Ctx {
 }
 
 impl Ctx {
-    pub async fn display_options(&self) {
-        let mut choices = vec![];
-        for package in get_packages().await {
-                for task in package.tasks() {
-                    let task = task.clone();
-                    choices.push(AsyncChoice::new(
-                        task.name(),
-                        task.runtime(),
-                        Arc::new(move || {
-                            let task = task.clone();
-                            Pin::from(Box::new(async move {
-                                runtime::execute(task.get_code(), task.runtime(), "run".to_string())
-                                    .await
-                                    .unwrap();
-                            }))
-                        }),
-                        package.name().to_string(),
-                    ));
-                }
-        }
-
-
-        choices.push(AsyncChoice::new(
-            "exit",
-            "exit the program",
-            Arc::new(move || {
-                Pin::from(Box::new(async move {
-                    std::process::exit(0);
-                }))
-            }),
-            "".to_string(),
-        ));
-
-        let configurations = get_configurations();
-        let choice = display_selection_menu("select a task to run it", &choices, &configurations);
-        if let Some(choice) = choice {
-            choice.run().await;
-        }
-    }
-
     pub fn empty() -> Self {
         Ctx {
             variables: Arc::new(Mutex::new(vec![])),
@@ -198,7 +196,7 @@ impl Ctx {
     }
 }
 
-pub fn get_configurations() -> Vec<AsyncChoice> {
+pub async fn get_configurations() -> Vec<AsyncChoice> {
     vec![
         AsyncChoice::new(
             "settings",
@@ -231,10 +229,6 @@ pub fn get_configurations() -> Vec<AsyncChoice> {
     ]
 }
 
-
-
-
-
 pub fn get_local_repository_path(name: &str) -> std::path::PathBuf {
     let current_dir = std::env::current_dir().unwrap();
     let path = current_dir.join("repositories").join(name);
@@ -243,4 +237,3 @@ pub fn get_local_repository_path(name: &str) -> std::path::PathBuf {
     }
     path
 }
-

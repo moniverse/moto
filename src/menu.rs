@@ -4,8 +4,9 @@ use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, ClearType, EnterAlternateScreen, LeaveAlternateScreen
 };
-use futures::Future;
+use futures::{Future, FutureExt};
 use std::collections::HashMap;
+use std::env;
 use std::fmt::Result;
 use std::io::Write;
 use std::pin::Pin;
@@ -21,7 +22,7 @@ const BANNER: &str = r#"
              /_/ /_/ /_/\____/\__/\____/ 
 "#;
 
-fn print_banner() {
+pub fn print_banner() {
     println!("{}", vibrant(BANNER));
     divider_vibrant();
 }
@@ -98,6 +99,7 @@ pub async fn scan() -> std::io::Result<()> {
                 match script {
                     Ok(script) => {
                        set( Package::new(package_name, script)).await;
+            
                     }
                     Err(e) =>  {
                         eprintln!("Error parsing file: {:?}", e);
@@ -150,7 +152,7 @@ pub fn display_selection_menu(
         crossterm::cursor::Hide,
     ).expect("Failed to clear terminal");
 
-    print_banner();
+
     print_guidelines();
 
     let mut selected = 0usize;
@@ -234,7 +236,8 @@ pub fn display_selection_menu(
                         crossterm::cursor::Show,
                         crossterm::terminal::Clear(ClearType::FromCursorDown),
                     ).expect("Failed to clear terminal");
-                    break;
+                    //terminate the program
+                    std::process::exit(0);
                 }
                 _ => {}
             }
@@ -334,3 +337,112 @@ fn print_menu(header: &str, choices: &[AsyncChoice], selected: usize, search_tex
     ).expect("Failed to clear terminal");
 }
 
+pub async fn display_options() ->  AsyncChoice {
+    let  choices = get_tasks().await.into_iter().map(|task| task.into()).collect::<Vec<AsyncChoice>>()
+                    .into_iter().chain(default_choices().into_iter()).collect::<Vec<AsyncChoice>>();
+    let configurations = get_configurations().await;
+    let mut selection = None;
+    while selection.is_none() {
+        selection = display_selection_menu("what do you want to do?", &choices, &configurations);
+    }
+    selection.unwrap()
+}
+
+/// handling args
+/// moto <task_name> will run the task with the name <task_name>.
+/// if no task with the name <task_name> is found, the user will be prompted to select a task from the list of available tasks.
+/// moto <task_name> [:vname = whatever the content until next occurance of `[:` or eof 
+/// this will allow users to provide long sentences as variables without having to use quotes
+pub async fn handle_args() -> Option<AsyncChoice> {
+    let args: Vec<String> = env::args().collect();
+    if args.len() > 1 {
+        showln!(gray_dim, "searching for ", yellow_bold, &args[1], gray_dim, "...");
+        let (task_name, variables) = parse_args(&args);
+        let mut matched = None;
+        
+        for task in get_tasks().await {
+            if task.name().to_lowercase().trim() == task_name {
+                matched = Some(task);
+                break;
+            }
+        }
+        for var in variables {
+            showln!(cyan_bold, &var.name(), gray_dim, " = ", white, &var.get_value_str());
+            set(var).await;
+        }
+
+        divider_vibrant();
+
+        if let Some(task) = matched {
+            let title = task.name();
+            showln!(yellow_bold, "╭─ ", gray_dim, "running ", yellow_bold, title, yellow_bold, " ─",yellow_bold,"─".repeat(47 - title.len()));
+            return Some(task.into());
+        } else {
+            showln!(orange_bold, "could not find ", gray_dim,"a task with the name ", yellow_bold, &task_name, gray_dim, "... ");
+            return None;
+        }
+    } else {
+        None
+    }
+
+
+}
+
+
+impl From<Task> for AsyncChoice {
+    fn from(task: Task) -> Self {
+        let name = task.name();
+        let description = format!("{}", task.runtime());
+        let file_path = env::current_dir().unwrap_or_default().to_str().unwrap_or_default().to_string();
+
+        AsyncChoice::new(name, description,  Arc::new(move || {
+            let task = task.clone();
+            let code = task.get_code();
+            let runtime = task.runtime();
+            Pin::from(Box::new(async move {
+                execute(code, runtime, "run").await.unwrap();
+            }))
+        }), file_path)
+    }
+}
+
+
+
+fn parse_args(args: &[String]) -> (String, Vec<Variable>) {
+    let mut variables = Vec::new();
+    let mut task_name = String::new();
+
+    for arg in args.iter().skip(1) {
+        if let Some(start) = arg.find("[:") {
+            if let Some(end) = arg[start..].find(']') {
+                let var_str = &arg[start + 2..start + end];
+                if let Some(eq_pos) = var_str.find('=') {
+                    let name = var_str[..eq_pos].to_string();
+                    let content = var_str[eq_pos + 1..].to_string();
+                    variables.push(Variable::new(name, content));
+                }
+            }
+        } else if task_name.is_empty() { // Assuming the first non-variable argument is the task name
+            task_name = arg.to_lowercase(); // Keeping the task name lowercase for consistency
+        }
+    }
+
+    (task_name, variables)
+}
+
+
+fn default_choices() ->   Vec<AsyncChoice> {
+    vec![
+        AsyncChoice::new(
+            "exit",
+            "exit the program",
+            Arc::new(move || {
+                Pin::from(Box::new(async move {
+                    showln!(yellow_bold, "╰─→ ", gray_dim, "exiting moto...");
+                    std::process::exit(0);
+                }))
+            }),
+            "".to_string(),
+        ),
+    ]
+}

@@ -266,6 +266,7 @@ pub fn inject_variables(code: impl Into<String>, variables: &[Variable]) -> Stri
         let placeholder = format!("[:{}]", variable.name());
         let mut start_pos = 0;
         while let Some(start) = code[start_pos..].find(&placeholder) {
+            showln!(yellow_bold, "⇣ ", gray_dim, &code[start_pos..]);
             let start = start + start_pos;
             let end = code[start..]
                 .find(']')
