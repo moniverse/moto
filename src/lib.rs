@@ -69,7 +69,7 @@ pub mod repository {
                              match cells {
                                 Ok((_, cells)) => {
                                     for cell in cells {
-                                        ctx::set(cell).await;
+                                        ctx::push_cell(cell).await;
                                     }
                                 }
                                 Err(e) => {

@@ -26,9 +26,7 @@ pub async fn get_children() -> Vec<Cell> {
     CTX.children.clone().lock().await.clone()
 }
 
-pub async fn get_variables() -> Vec<Variable> {
-    CTX.variables.clone().lock().await.clone()
-}
+
 
 pub async fn get_runtimes() -> Vec<Runtime> {
     CTX.children
@@ -122,75 +120,34 @@ pub async fn get_runtime(name: impl Into<String>) -> Option<Runtime> {
         .next()
 }
 
-pub async fn get_variable(name: impl Into<String>) -> Atom {
-    //go through the list of cells from bottom to top
-    let name = name.into();
-    for cell in CTX.children.clone().lock().await.iter().rev() {
-        match cell {
-            Cell::Assignment(variable) => {
-                if variable.identifier_is(&name) {
-                    return variable.value.clone();
-                }
-            }
-            _ => {}
-        }
-    }
-    Atom::Null
+pub async fn get_variable(name: impl Into<String>) -> Option<Atom> {
+    let name = name.into().trim().to_lowercase();
+    CTX.variables.clone().lock().await.get(&name).cloned()
 }
 
-// pub async fn get_options() -> Vec<AsyncChoice> {
-//     let mut choices = vec![];
-//     for package in get_packages().await {
-//         for task in package.tasks() {
-//             let task = task.clone();
-//             choices.push(AsyncChoice::new(
-//                 task.name(),
-//                 task.runtime(),
-//                 Arc::new(move || {
-//                     let task = task.clone();
-//                     Pin::from(Box::new(async move {
-//                         runtime::execute(task.get_code(), task.runtime(), "run".to_string())
-//                             .await
-//                             .unwrap();
-//                     }))
-//                 }),
-//                 package.name().to_string(),
-//             ));
-//         }
-//     }
-
-//     choices.push(AsyncChoice::new(
-//         "exit",
-//         "exit the program",
-//         Arc::new(move || {
-//             Pin::from(Box::new(async move {
-//                 std::process::exit(0);
-//             }))
-//         }),
-//         "".to_string(),
-//     ));
-
-//     choices
-// }
+pub async fn set_variable(name: impl Into<String>, value: Atom) {
+    let name = name.into().trim().to_lowercase();
+    CTX.variables.clone().lock().await.insert(name, value);
+}
 
 
 
 
 
-pub async fn set(cell: impl Into<Cell>) {
+pub async fn push_cell(cell: impl Into<Cell>) {
     CTX.children.clone().lock().await.push(cell.into());
 }
 
 #[derive(Clone, Debug)]
 pub struct Ctx {
-    pub variables: Arc<Mutex<Vec<Variable>>>,
+    pub variables: Arc<Mutex<HashMap<String, Atom>>>,
     pub children: Arc<Mutex<Vec<Cell>>>,
 }
 
 impl Ctx {
     pub fn empty() -> Self {
         Ctx {
-            variables: Arc::new(Mutex::new(vec![])),
+            variables: Arc::new(Mutex::new(HashMap::new())),
             children: Arc::new(Mutex::new(vec![])),
         }
     }

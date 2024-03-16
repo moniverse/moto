@@ -720,12 +720,8 @@ impl Variable {
         self.value != Atom::Null
     }
 
-    pub fn get_value(&self) -> Option<Atom> {
-        if self.value == Atom::Null {
-            None
-        } else {
-            Some(self.value.clone())
-        }
+    pub fn get_value(&self) -> Atom {
+        self.value.clone()
     }
 
     pub fn get_value_str(&self) -> String {

@@ -10,7 +10,7 @@ task hello {
 }:ps
 
 task hello_name {
-    echo "hello [:name]"
+    echo "hello [:name="there"]"
 }:ps
 
 // tasks can be defined in any runtime , provided the runtime's definition is available to the moto runtime

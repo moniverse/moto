@@ -98,7 +98,7 @@ pub async fn scan() -> std::io::Result<()> {
 
                 match script {
                     Ok(script) => {
-                       set( Package::new(package_name, script)).await;
+                       push_cell( Package::new(package_name, script)).await;
             
                     }
                     Err(e) =>  {
@@ -368,7 +368,7 @@ pub async fn handle_args() -> Option<AsyncChoice> {
         }
         for var in variables {
             showln!(cyan_bold, &var.name(), gray_dim, " = ", white, &var.get_value_str());
-            set(var).await;
+            set_variable(var.name(), var.get_value()).await;
         }
 
         divider_vibrant();

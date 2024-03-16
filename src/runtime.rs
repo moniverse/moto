@@ -2,7 +2,7 @@ use crate::*;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 
-use crate::{get_runtime, get_variables};
+use crate::{get_runtime};
 
 
 pub async fn execute(
@@ -45,6 +45,7 @@ async fn execute_simple_runtime(
     let stdout = child.stdout.take().expect("failed to get stdout");
     let stderr = child.stderr.take().expect("failed to get stderr");
 
+
     for line in code.lines() {
         let displayable = truncate_line(line, 50);
         if !displayable.is_empty() {
@@ -52,7 +53,9 @@ async fn execute_simple_runtime(
               showln!(yellow_bold, "⇣ ", gray_dim, displayable);
         }
 
-        write_to_stdin(&mut stdin, line).await?;
+        let line = inject_variables(line).await;
+
+        write_to_stdin(&mut stdin, &line).await?;
     }
 
     std::mem::drop(stdin);
@@ -77,7 +80,6 @@ async fn execute_complex_runtime(
         .get_task(runtime_task.to_string())
         .ok_or_else(|| format!("task {} not found in runtime {}", runtime_task, runtime.name()))?;
 
-    let variables = get_variables().await;
     let runtime = task.runtime();
 
     let (command, arg) = match runtime.as_str() {
@@ -91,7 +93,7 @@ async fn execute_complex_runtime(
     let stdout = child.stdout.take().expect("failed to get stdout");
     let stderr = child.stderr.take().expect("failed to get stderr");
 
-    execute_task_code(&task, code, &variables, &mut stdin).await?;
+    execute_task_code(&task, code,  &mut stdin).await?;
 
     stdin.flush().await.expect("failed to flush stdin");
     std::mem::drop(stdin);
@@ -122,7 +124,6 @@ fn spawn_child_process(
 async fn execute_task_code(
     task: &Task,
     code: &str,
-    variables: &[Variable],
     stdin: &mut tokio::process::ChildStdin,
 ) -> Result<(), String> {
     for line in task.get_code().lines().skip_while(|line| line.trim().is_empty()) {
@@ -133,8 +134,9 @@ async fn execute_task_code(
         }
        
 
-        let line = inject_variables(line, variables);
-        let line = inject_variables(&line, &[Variable::new("block", code.to_string())]);
+        let line = inject_variables(line).await;
+        let code = inject_variables(code).await;
+        let line = inject_block_code(&line, &code);
 
         write_to_stdin(stdin, &line).await?;
     }
@@ -186,6 +188,10 @@ fn show_output(line: &str) {
     
 }
 
+fn print_patching_variable(name: &str, value: &Atom) {
+    showln!(cyan_bold, "• ", gray_dim, name, cyan_bold, " » ", white, value);
+}
+
 fn show_error(line: &str) {
     let mut remaining_line = line.to_string();
     while remaining_line.len() > 56 {
@@ -229,6 +235,8 @@ fn print_elapsed_time(elapsed: String) {
     );
 }
 
+
+
 pub async fn get_workspace() -> String {
     let current_dir = std::env::current_dir().unwrap();
     let workspace = current_dir.join("workspace");
@@ -259,32 +267,49 @@ impl Runtime {
     }
 }
 
-pub fn inject_variables(code: impl Into<String>, variables: &[Variable]) -> String {
+use std::collections::HashSet;
+
+// Injects variables into the code
+// code will have placeholders in the form of [:variable_name] or [:variable_name=variable_value]
+// This function will replace the placeholders with the actual variable values.
+// if default value is provided, it will be used if the variable is not found in the context
+// if no default value is provided, the placeholder will be replaced with null
+pub async fn inject_variables(code: impl Into<String>) -> String {
     let mut code = code.into();
-    let mut modified_code = String::new();
-    for variable in variables {
-        let placeholder = format!("[:{}]", variable.name());
-        let mut start_pos = 0;
-        while let Some(start) = code[start_pos..].find(&placeholder) {
-            showln!(yellow_bold, "⇣ ", gray_dim, &code[start_pos..]);
-            let start = start + start_pos;
-            let end = code[start..]
-                .find(']')
-                .map(|i| i + start)
-                .unwrap_or_else(|| code.len());
-            let placeholder = &code[start..=end];
-            let default_value = placeholder
-                .find('=')
-                .map(|start| &placeholder[start + 1..])
-                .unwrap_or("");
-            let value = variable.get_value_or(default_value.into());
-            modified_code.push_str(&code[start_pos..start]);
-            modified_code.push_str(&value.to_string());
-            start_pos = end + 1;
-        }
-        modified_code.push_str(&code[start_pos..]);
-        code = modified_code.clone();
-        modified_code.clear();
+    // Parse the code to find all unique placeholders
+    let placeholders: HashSet<String> = code.match_indices("[:")
+        .filter_map(|(start, _)| {
+            code[start..].find(']')
+                .map(|end| start..start+end+1)
+                .map(|range| code[range].to_string())
+        })
+        .collect();
+
+    // If no placeholders are found, return the original code
+    if placeholders.is_empty() {
+        return code;
     }
+
+    for placeholder in placeholders {
+        let mut var_name = placeholder.trim_start_matches("[:").trim_end_matches("]");
+        let mut default_value = Atom::Null;
+        if var_name.contains("=") {
+            let parts: Vec<&str> = var_name.splitn(2, "=").collect();
+            var_name = parts[0];
+            default_value =  Atom::from(parts[1]);
+        }
+        let variable = get_variable(var_name).await.unwrap_or(default_value);
+
+        print_patching_variable(&var_name,&variable);
+        code =code.replace(&placeholder, &variable.to_string()) ;
+    }
+
     code
+
+}
+
+
+
+fn inject_block_code(line: &str, code: &str) -> String {
+   line.replace("[:code]", code).replace("[:block]", code)
 }
