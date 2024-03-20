@@ -5,13 +5,18 @@
 // a cell can be a package,runtime or a task
 // a task is a sequence of commands that are executed in order one line at a time using the runtime specified at its tail
 // for example `task some_task{ echo "hello world" }:ps` is a task cell. the tail of the cell is `:ps` which specifies the runtime to be used for executing the task
+
 task hello {
-    echo "hello world"
+    echo 'hello [:name="there"]'
 }:ps
 
-task hello_name {
-    echo "hello [:name="there"]"
-}:ps
+
+// in the above task, we are using a variable `[:name]` with a default value of `there`
+// the variable can be overridden by passing a value to the task when invoking it
+// you can call `moto hello [:name=aghil] [:age=20]` to override the default value of `[:name]` and set it to `aghil` and set the value of `[:age]` to `20`
+// the value of `[:age]` will be `20` and the value of `[:name]` will be `aghil` inside the task
+// the value of `[:age]` will be `null` and the value of `[:name]` will be `there` inside the task if you dont pass a value for `[:age]` when invoking the task
+
 
 // tasks can be defined in any runtime , provided the runtime's definition is available to the moto runtime
 // let's define a task in the dart runtime
@@ -19,6 +24,11 @@ task hello_from_dart {
     print("hello world");
 }:dart
 
+
+task install {
+    cd ..
+    cargo install  --path . 
+}:ps
 
 
 
@@ -33,8 +43,8 @@ runtime dart {
 
     task run {
         # inside a task you can write any code that you want to run in the language of the runtime
-        # for example here the code is written in powershell. that is why
-        $code = @'[:block]'@
+        # for example here the code is written in powershell. that is why [:asd] [:asd = asd]
+        $code = @'[:code]'@
         $wrapped_code = "void main() { $code }"
         $wrapped_code | Out-File -FilePath "./_.dart" -Encoding UTF8
         dart run "./_.dart"
