@@ -390,42 +390,67 @@ impl InterpolatedString {
         InterpolatedString::new(parts)
     }
 
+
     pub fn decompose(&self) -> InterpolatedString {
         let mut parts = vec![];
         for part in &self.0 {
             match part {
                 InterpolatedStringPart::String(value) => {
-                    let mut value = value.clone();
-                    while let Some(start) = value.find("[:") {
-                        let end = value[start..].find("]").unwrap();
-                        let end = start + end + 1;
-                        let part = &value[start..end];
-                        if part.contains("(") {
-                            let name = part[2..].split("(").next().unwrap();    
-                            let args = part[2..].split("(").nth(1).unwrap();
-                            let args = args[..args.len()-1].split(",").map(|x| Atom::string(x)).collect();
-
-                            parts.push(InterpolatedStringPart::Function(Function::new(name, args)));
-                        } else {
-                             if part.contains("=") {
-                                let name = part[2..].split("=").next().unwrap();
-                                let value = part[2..].split("=").nth(1).unwrap();
-                                parts.push(InterpolatedStringPart::Variable(Variable::new(name, value)));
-                            } else {
-                                parts.push(InterpolatedStringPart::Variable(Variable::new(part[2..].to_string(), "")));
-                            }
-                            
+                    let mut start = 0;
+                    while let Some(left_bracket_pos) = value[start..].find("[:") {
+                        let left_bracket_pos = start + left_bracket_pos;
+                        if left_bracket_pos > start {
+                            parts.push(InterpolatedStringPart::String(
+                                value[start..left_bracket_pos].to_string(),
+                            ));
                         }
-                        value = value[end..].to_string();
+                        let right_bracket_pos = value[left_bracket_pos + 2..]
+                            .find(']')
+                            .map(|pos| left_bracket_pos + 2 + pos)
+                            .unwrap();
+                        let part = &value[left_bracket_pos + 2..right_bracket_pos];
+                        if let Some(left_paren_pos) = part.find('(') {
+                            let name = &part[..left_paren_pos];
+                            let args = &part[left_paren_pos + 1..part.len() - 1];
+                            let args = args
+                                .split(',')
+                                .map(|arg| arg.trim())
+                                .filter(|arg| !arg.is_empty())
+                                .map(|arg| {
+                                    if let Some(pos) = arg.find('=') {
+                                        let key = &arg[..pos];
+                                        let value = &arg[pos + 1..];
+                                        Atom::Object( Box::new(Object{values: vec![(key.to_string(), Atom::String(value.to_string()))]}))
+                                    } else {
+                                        Atom::String(arg.to_string())
+                                    }
+                                })
+                                .collect();
+                            parts.push(InterpolatedStringPart::Function(Function::new(
+                                name, args,
+                            )));
+                        } else if let Some(equals_pos) = part.find('=') {
+                            let name = &part[..equals_pos];
+                            let value = &part[equals_pos + 1..];
+                            parts.push(InterpolatedStringPart::Variable(Variable::new(
+                                name, value,
+                            )));
+                        } else {
+                            parts.push(InterpolatedStringPart::Variable(Variable::new(
+                                part, "",
+                            )));
+                        }
+                        start = right_bracket_pos + 1;
                     }
-                    parts.push(InterpolatedStringPart::String(value));
+                    if start < value.len() {
+                        parts.push(InterpolatedStringPart::String(value[start..].to_string()));
+                    }
                 }
                 part => parts.push(part.clone()),
             }
         }
         InterpolatedString::new(parts)
     }
-
 
 
     pub fn is_empty(&self) -> bool {

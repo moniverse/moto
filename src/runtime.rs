@@ -218,7 +218,7 @@ use std::collections::HashSet;
 pub async fn inject_variables(code: impl Into<InterpolatedString>) -> String {
     let mut code = code.into();
     while code.is_computable() {
-        code = dbg!(code).decompose().compute().await;
+        code = code.decompose().compute().await;
     }
     code.to_string()
 }
