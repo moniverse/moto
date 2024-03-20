@@ -212,9 +212,7 @@ impl Runtime {
     }
 }
 
-use std::collections::HashSet;
 
-// Processes InterpolatedString and returns a string with all variables replaced by their values
 pub async fn inject_variables(code: impl Into<InterpolatedString>) -> String {
     let mut code = code.into();
     while code.is_computable() {
