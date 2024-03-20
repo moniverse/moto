@@ -1,0 +1,51 @@
+// Define the Rust runtime
+runtime rust {
+    // Task to initialize a new Rust project
+    task init {
+        mkdir -p [:project_name="_"]/src
+        echo @'
+        [package]
+        name = "[:project_name]"
+        version = "0.1.0"
+        edition = "2021"
+        '@ > [:project_name]/Cargo.toml
+    }:ps
+
+    // Task to write the Rust code to the main.rs file
+    task write_code {
+        echo """
+        fn main() {
+            [:code]
+        }
+        """ > [:project_name="_"]/src/main.rs
+    }:ps
+
+    // Task to build the Rust project
+    task build {
+        cd [:project_name="_"]
+        cargo build
+    }:ps
+
+    // Task to run the Rust project
+    task  run {
+        // Initialize the Rust project
+        [:init]
+
+        // Write the Rust code to main.rs
+        [:write_code]
+
+        // Build the Rust project
+        [:build]
+
+        // Run the Rust project
+        cd [:project_name]
+        cargo run
+    }:ps
+}:moto
+
+
+task test {
+    fn main(){
+        println!("Hello, World!");
+    }
+}:rust

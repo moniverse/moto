@@ -170,7 +170,29 @@ package rust {
 
 
 
+/// # using variables
+/// variables can be used in any part of the script. they dont even have to be defined (not just in the same file, but literally anywhere in the script)
+/// the idea is to allow placement of a tag in the script that can be replaced with a value at runtime if needed. otherwise, the default value provided in the script will be used
+/// for example, the `[:name="there"]` tag in the `hello` task can be replaced with a value at runtime by calling `moto hello [:name=aghil]`
+/// if the value is not provided, the default value `there` will be used. if no default value is provided, prior to executing the line, moto will prompt the user to provide a value
+/// this allows for dynamic execution of tasks based on user input, form data, environment variables, or any other source of data
+/// once defined, value of a variable is accessible globally and wont change unless explicitly changed. therefore variables are only bound by sequence of execution of the script
+/// not the scope of definition or even the order of definition. this makes loops and conditionals have a different dynamics from other languages
 
-
+/// # arguments
+/// arguments can be passed to a task when invoking it. the arguments are passed in the form of `[:add(1,5)]` where `1` and `5` are positional arguments
+/// we can also pass named arguments in the form of `[:add(a:1,b:5)]` where `a` and `b` are named arguments
+/// positional arguments are special in that it will replace the first variable in the task that is not already replaced by a named argument
+/// for example,
+/// `task add {
+///     let result = [:a] + [:b]
+/// }:moto`
+/// if we call `[:add(1,5)]`, the `[:a]` will be replaced by `1` and `[:b]` will be replaced by `5` and the result will be `6`
+/// if we call `[:add(b:5,a:1)]`, the `[:a]` will be replaced by `1` and `[:b]` will be replaced by `5` and the result will be `6`
+/// if we call `[:add(a:1,5)]`, the `[:a]` will be replaced by `1` and `[:b]` will be replaced by `5` and the result will be `6`
+/// if we call `[:add(5,a:1)]`, the `[:a]` will be replaced by `5` and `[:b]` will be replaced by `1` and the result will be `6`
+/// this makes it easy and intuitive to use tasks with different arguments in different places in the script
+/// note that if we call `[:add]`, the script will prompt the user to provide a value for `a` and `b` before executing the task
+/// this makes moto such a dynamic and interactive language to work with
 
 

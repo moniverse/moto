@@ -2,11 +2,10 @@ use crate::*;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 
-use crate::{get_runtime};
-
+use crate::get_runtime;
 
 pub async fn execute(
-    code: impl Into<String>,
+    code: impl Into<InterpolatedString>,
     runtime: impl Into<String>,
     runtime_task: impl Into<String>,
 ) -> Result<String, String> {
@@ -18,9 +17,9 @@ pub async fn execute(
 
     match runtime.as_str() {
         "shell" | "sh" | "powershell" | "ps" => {
-            execute_simple_runtime(&code, &runtime, &workspace).await
+            execute_simple_runtime(code, &runtime, &workspace).await
         }
-        _ => execute_complex_runtime(&code, &runtime, &runtime_task, &workspace).await,
+        _ => execute_complex_runtime(code, &runtime, &runtime_task, &workspace).await,
     }?;
 
     let elapsed = format_elapsed_time(instance.elapsed());
@@ -30,7 +29,7 @@ pub async fn execute(
 }
 
 async fn execute_simple_runtime(
-    code: &str,
+    code: impl Into<InterpolatedString>,
     runtime: &str,
     workspace: &str,
 ) -> Result<(), String> {
@@ -44,16 +43,16 @@ async fn execute_simple_runtime(
     let mut stdin = child.stdin.take().expect("failed to get stdin");
     let stdout = child.stdout.take().expect("failed to get stdout");
     let stderr = child.stderr.take().expect("failed to get stderr");
-
+    let code = code.into();
 
     for line in code.lines() {
-        let displayable = truncate_line(line, 50);
+        let displayable = truncate_interpolatable_line(line.clone(), 50);
         if !displayable.is_empty() {
             // showln!(yellow_bold, "↓ ", gray_dim, displayable);
-              showln!(yellow_bold, "⇣ ", gray_dim, displayable);
+            showln!(yellow_bold, "⇣ ", gray_dim, displayable);
         }
 
-        let line = inject_variables(line).await;
+        let line = inject_variables(line.clone()).await;
 
         write_to_stdin(&mut stdin, &line).await?;
     }
@@ -68,7 +67,7 @@ async fn execute_simple_runtime(
 }
 
 async fn execute_complex_runtime(
-    code: &str,
+    code: impl Into<InterpolatedString>,
     runtime: &str,
     runtime_task: &str,
     workspace: &str,
@@ -76,9 +75,13 @@ async fn execute_complex_runtime(
     let runtime = get_runtime(runtime.to_string())
         .await
         .ok_or_else(|| format!("runtime {} not found", runtime))?;
-    let task = runtime
-        .get_task(runtime_task.to_string())
-        .ok_or_else(|| format!("task {} not found in runtime {}", runtime_task, runtime.name()))?;
+    let task = runtime.get_task(runtime_task.to_string()).ok_or_else(|| {
+        format!(
+            "task {} not found in runtime {}",
+            runtime_task,
+            runtime.name()
+        )
+    })?;
 
     let runtime = task.runtime();
 
@@ -93,12 +96,11 @@ async fn execute_complex_runtime(
     let stdout = child.stdout.take().expect("failed to get stdout");
     let stderr = child.stderr.take().expect("failed to get stderr");
 
-    execute_task_code(&task, code,  &mut stdin).await?;
+    execute_task_code(&task, code, &mut stdin).await?;
 
     stdin.flush().await.expect("failed to flush stdin");
     std::mem::drop(stdin);
     process_output(stdout, stderr).await;
-
 
     child.wait().await.expect("failed to wait on child");
 
@@ -123,20 +125,20 @@ fn spawn_child_process(
 
 async fn execute_task_code(
     task: &Task,
-    code: &str,
+    code: impl Into<InterpolatedString>,
     stdin: &mut tokio::process::ChildStdin,
 ) -> Result<(), String> {
-    for line in task.get_code().lines().skip_while(|line| line.trim().is_empty()) {
-        let displayable = truncate_line(line, 50);
+    let code = code.into();
+    for line in task.get_code().lines().skip_while(|line| line.is_empty()) {
+        let displayable = truncate_interpolatable_line(line.clone(), 50);
         if !displayable.is_empty() {
             // showln!(yellow_bold, "↓ ", gray_dim, displayable);
-              showln!(yellow_bold, "⇣ ", gray_dim, displayable);
+            showln!(yellow_bold, "⇣ ", gray_dim, displayable);
         }
-       
 
-        let line = inject_variables(line).await;
-        let code = inject_variables(code).await;
-        let line = inject_block_code(&line, &code);
+        let line = inject_variables(line.clone()).await;
+        let injcode = inject_variables(code.clone()).await;
+        let line = inject_block_code(&line, &injcode);
 
         write_to_stdin(stdin, &line).await?;
     }
@@ -144,14 +146,10 @@ async fn execute_task_code(
     // Take ownership of stdin and drop it
     let _ = stdin.flush().await;
 
-
     Ok(())
 }
 
-async fn write_to_stdin(
-    stdin: &mut tokio::process::ChildStdin,
-    line: &str,
-) -> Result<(), String> {
+async fn write_to_stdin(stdin: &mut tokio::process::ChildStdin, line: &str) -> Result<(), String> {
     stdin
         .write_all(line.as_bytes())
         .await
@@ -162,10 +160,7 @@ async fn write_to_stdin(
         .map_err(|_| "failed to write newline to stdin".to_string())
 }
 
-async fn process_output(
-    stdout: tokio::process::ChildStdout,
-    stderr: tokio::process::ChildStderr,
-) {
+async fn process_output(stdout: tokio::process::ChildStdout, stderr: tokio::process::ChildStderr) {
     let mut stdout_lines = BufReader::new(stdout).lines();
     while let Some(line) = stdout_lines.next_line().await.unwrap() {
         show_output(&line);
@@ -185,57 +180,7 @@ fn show_output(line: &str) {
         remaining_line = second.to_string();
     }
     showln!(white, "│ ", white, remaining_line);
-    
 }
-
-fn print_patching_variable(name: &str, value: &Atom) {
-    showln!(cyan_bold, "• ", gray_dim, name, cyan_bold, " » ", white, value);
-}
-
-fn show_error(line: &str) {
-    let mut remaining_line = line.to_string();
-    while remaining_line.len() > 56 {
-        let (first, second) = remaining_line.split_at(56);
-        showln!(red_bold, "│ ", gray_dim, first);
-        remaining_line = second.to_string();
-    }
-    showln!(red_bold, "│ ", gray, remaining_line);
-}
-
-
-fn truncate_line(line: &str, max_chars: usize) -> String {
-    if line.trim().len() > max_chars {
-        format!("{}...", &line.trim()[..max_chars])
-    } else {
-        line.trim().to_string()
-    }
-}
-
-
-
-fn format_elapsed_time(elapsed: std::time::Duration) -> String {
-    if elapsed.as_secs() > 0 {
-        format!("{}s", elapsed.as_secs())
-    } else {
-        format!("{}ms", elapsed.as_millis())
-    }
-}
-
-fn print_elapsed_time(elapsed: String) {
-    let len = 60 - elapsed.len() - 3;
-    showln!(
-        white,
-        "╰─",
-        white,
-        "─".repeat(len),
-        gray,
-        " ",
-        yellow_bold,
-        elapsed
-    );
-}
-
-
 
 pub async fn get_workspace() -> String {
     let current_dir = std::env::current_dir().unwrap();
@@ -269,47 +214,15 @@ impl Runtime {
 
 use std::collections::HashSet;
 
-// Injects variables into the code
-// code will have placeholders in the form of [:variable_name] or [:variable_name=variable_value]
-// This function will replace the placeholders with the actual variable values.
-// if default value is provided, it will be used if the variable is not found in the context
-// if no default value is provided, the placeholder will be replaced with null
-pub async fn inject_variables(code: impl Into<String>) -> String {
+// Processes InterpolatedString and returns a string with all variables replaced by their values
+pub async fn inject_variables(code: impl Into<InterpolatedString>) -> String {
     let mut code = code.into();
-    // Parse the code to find all unique placeholders
-    let placeholders: HashSet<String> = code.match_indices("[:")
-        .filter_map(|(start, _)| {
-            code[start..].find(']')
-                .map(|end| start..start+end+1)
-                .map(|range| code[range].to_string())
-        })
-        .collect();
-
-    // If no placeholders are found, return the original code
-    if placeholders.is_empty() {
-        return code;
+    while code.is_computable() {
+        code = dbg!(code).decompose().compute().await;
     }
-
-    for placeholder in placeholders {
-        let mut var_name = placeholder.trim_start_matches("[:").trim_end_matches("]");
-        let mut default_value = Atom::Null;
-        if var_name.contains("=") {
-            let parts: Vec<&str> = var_name.splitn(2, "=").collect();
-            var_name = parts[0];
-            default_value =  Atom::from(parts[1]);
-        }
-        let variable = get_variable(var_name).await.unwrap_or(default_value);
-
-        print_patching_variable(&var_name,&variable);
-        code =code.replace(&placeholder, &variable.to_string()) ;
-    }
-
-    code
-
+    code.to_string()
 }
 
-
-
 fn inject_block_code(line: &str, code: &str) -> String {
-   line.replace("[:code]", code).replace("[:block]", code)
+    line.replace("[:code]", code).replace("[:block]", code)
 }

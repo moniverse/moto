@@ -127,9 +127,13 @@ pub async fn get_variable(name: impl Into<String>) -> Option<Atom> {
 
 pub async fn set_variable(name: impl Into<String>, value: Atom) {
     let name = name.into().trim().to_lowercase();
+    print_setting_variable(&name, &value);
     CTX.variables.clone().lock().await.insert(name, value);
 }
 
+fn print_setting_variable(name: &str, value: &Atom) {
+    showln!(cyan_bold, "• ", gray_dim, name, cyan_bold, " » ", white, value);
+}
 
 
 

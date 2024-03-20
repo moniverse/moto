@@ -8,8 +8,7 @@
 // Parse the input file
 mod parser;
 
-pub mod models;
-pub mod progress;
+
 use crossterm::terminal::{ClearType, LeaveAlternateScreen};
 use minimo::*;
 use moto::*;

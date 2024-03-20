@@ -95,7 +95,7 @@ impl Cell {
         }
     }
 
-    pub fn get_body(&self) -> Option<String> {
+    pub fn get_body(&self) -> Option<InterpolatedString> {
         match self {
             Cell::Task(task) => Some(task.body.clone()),
             Cell::Block(block) => Some(block.body.clone()),
@@ -110,7 +110,7 @@ impl Cell {
         })
     }
 
-    pub fn task(identifer: impl Into<String>, body: impl Into<String>, runtime: impl Into<String>) -> Self {
+    pub fn task(identifer: impl Into<String>, body: impl Into<InterpolatedString>, runtime: impl Into<String>) -> Self {
         Cell::Task(Task {
             identifer: Identifier(identifer.into()),
             body: body.into(),
@@ -126,7 +126,7 @@ impl Cell {
         })
     }
 
-    pub fn block(identifer: impl Into<String>, body: impl Into<String>, runtime: impl Into<String>) -> Self {
+    pub fn block(identifer: impl Into<String>, body: impl Into<InterpolatedString>, runtime: impl Into<String>) -> Self {
         Cell::Block(Block {
             identifer: Identifier(identifer.into()),
             body: body.into(),
@@ -307,13 +307,206 @@ impl Assignment {
 #[display(fmt = "task \x1b[33m{identifer}:\x1b[33m{runtime}\x1b[0m")]
 pub struct Task {
     pub identifer: Identifier,
-    pub body:  String,
+    pub body:  InterpolatedString,
     pub runtime: Identifier,
 }
 
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+/// interplated strings are a sequence of strings and variables/functions 
+/// eg. `hello [:name]` or `hello [:name="world"]` or `hello [:name="world"] [:age=30]` or `hello [:name="world"] [:age=30] [:greet("world")]
+/// here `[:name]` and `[:age=30]` are variables and `[:greet("world")]` is a function , rest are strings 
+/// variables and functions are replaced with their values before the code is executed
+
+pub struct InterpolatedString(pub Vec<InterpolatedStringPart>);
+#[derive(Debug, Clone, PartialEq, Eq, Display)]
+pub enum InterpolatedStringPart {
+    String(String),
+    Variable(Variable),
+    Function(Function),
+}
+
+impl std::fmt::Display for InterpolatedString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for part in &self.0 {
+            write!(f, "{}", part)?;
+        }
+        Ok(())
+    }
+}
+
+impl InterpolatedString {
+    pub fn new(parts: Vec<InterpolatedStringPart>) -> Self {
+        Self(parts)
+    }
+
+
+
+    pub fn raw(value: impl Into<String>) -> Self {
+        Self(vec![InterpolatedStringPart::String(value.into())])
+    }
+
+    pub fn parts(&self) -> Vec<InterpolatedStringPart> {
+        self.0.clone()
+    }
+
+    pub fn is_computable(&self) -> bool {
+        for part in &self.0 {
+            match part {
+                InterpolatedStringPart::String(s) => {
+                    let mut value = s.clone();
+                    if value.contains("[:") {
+                        return true;
+                    }
+                }
+                InterpolatedStringPart::Variable(_) => return true,
+                InterpolatedStringPart::Function(_) => return true,
+            }
+        }
+        false
+    }
+
+    pub async fn compute(&self) -> Self {
+        let mut parts = vec![];
+        for part in &self.0 {
+            match part {
+                InterpolatedStringPart::String(value) => parts.push(InterpolatedStringPart::String(value.clone())),
+                InterpolatedStringPart::Variable(variable) => {
+                    let name = variable.name();
+                    let default = variable.get_value_str();
+
+                    match get_variable(&name).await {
+                        Some(value) => parts.push(InterpolatedStringPart::String(value.to_string())),
+                        None => parts.push(InterpolatedStringPart::String(default)),
+                    }
+                
+                }
+                InterpolatedStringPart::Function(function) => {
+                  
+                  }
+                
+            }
+        }
+        InterpolatedString::new(parts)
+    }
+
+    pub fn decompose(&self) -> InterpolatedString {
+        let mut parts = vec![];
+        for part in &self.0 {
+            match part {
+                InterpolatedStringPart::String(value) => {
+                    let mut value = value.clone();
+                    while let Some(start) = value.find("[:") {
+                        let end = value[start..].find("]").unwrap();
+                        let end = start + end + 1;
+                        let part = &value[start..end];
+                        if part.contains("(") {
+                            let name = part[2..].split("(").next().unwrap();    
+                            let args = part[2..].split("(").nth(1).unwrap();
+                            let args = args[..args.len()-1].split(",").map(|x| Atom::string(x)).collect();
+
+                            parts.push(InterpolatedStringPart::Function(Function::new(name, args)));
+                        } else {
+                             if part.contains("=") {
+                                let name = part[2..].split("=").next().unwrap();
+                                let value = part[2..].split("=").nth(1).unwrap();
+                                parts.push(InterpolatedStringPart::Variable(Variable::new(name, value)));
+                            } else {
+                                parts.push(InterpolatedStringPart::Variable(Variable::new(part[2..].to_string(), "")));
+                            }
+                            
+                        }
+                        value = value[end..].to_string();
+                    }
+                    parts.push(InterpolatedStringPart::String(value));
+                }
+                part => parts.push(part.clone()),
+            }
+        }
+        InterpolatedString::new(parts)
+    }
+
+
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn lines(&self) ->  impl Iterator<Item = InterpolatedString> {
+        let tostring = self.to_string();
+        let lines = tostring.split("\n").map(|x| InterpolatedStringPart::String(x.to_string())).collect();
+        vec![InterpolatedString::new(lines)].into_iter()
+    }
+}
+
+
+
+impl From<String> for InterpolatedString {
+    fn from(value: String) -> Self {
+        Self(vec![InterpolatedStringPart::String(value)])
+    }
+}
+
+impl From<&str> for InterpolatedString {
+    fn from(value: &str) -> Self {
+        Self(vec![InterpolatedStringPart::String(value.to_string())])
+    }
+}
+
+impl InterpolatedStringPart {
+    pub fn to_string(&self) -> String {
+        match self {
+            InterpolatedStringPart::String(value) => value.clone(),
+            InterpolatedStringPart::Variable(variable) => variable.to_string(),
+            InterpolatedStringPart::Function(function) => function.to_string(),
+        }
+    }
+
+    pub fn is_computable(&self) -> bool {
+        match self {
+            InterpolatedStringPart::String(s) => {
+                let mut value = s.clone();
+                 if value.contains("[:") {
+                    return true;
+                 }
+                false
+            }
+            InterpolatedStringPart::Variable(_) => true,
+            InterpolatedStringPart::Function(_) => true,
+        }
+    }
+
+    pub async fn compute(&self) -> InterpolatedStringPart {
+        match self {
+            InterpolatedStringPart::String(value) => InterpolatedStringPart::String(value.clone()),
+            InterpolatedStringPart::Variable(variable) => {
+                let name = variable.name();
+                let default = variable.get_value_str();
+
+                match get_variable(&name).await {
+                    Some(value) => InterpolatedStringPart::String(value.to_string()),
+                    None => InterpolatedStringPart::String(default),
+                }
+            }
+            InterpolatedStringPart::Function(function) => {
+                let name = function.identifier.0.clone();
+                let args = function.arguments.clone();
+                InterpolatedStringPart::String(format!("[:{}({})]", name, args.iter().map(|x| x.to_string()).collect::<Vec<String>>().join(", ")))
+                // match get_function(&name).await {
+                //     Some(value) => InterpolatedStringPart::String(value.to_string()),
+                //     None => InterpolatedStringPart::String(format!("[:{}({})]", name, args.iter().map(|x| x.to_string()).collect::<Vec<String>>().join(", "))),
+                // }
+            }
+        }
+    }
+}
+
+
+
+
+
 impl Task {
-    pub fn new(identifer: impl Into<String>, body: impl Into<String>, runtime: impl Into<String>) -> Self {
+    pub fn new(identifer: impl Into<String>, body: impl Into<InterpolatedString>, runtime: impl Into<String>) -> Self {
         Self {
             identifer: Identifier(identifer.into()),
             body: body.into(),
@@ -333,7 +526,7 @@ impl Task {
         self.runtime.0.clone()
     }
 
-    pub fn get_code(&self) -> String {
+    pub fn get_code(&self) -> InterpolatedString {
         self.body.clone()
     }
 }
@@ -385,12 +578,12 @@ impl Runtime {
 #[display(fmt = "block \x1b[33m{identifer}:\x1b[33m{runtime}\x1b[0m")]
 pub struct Block {
     pub identifer: Identifier,
-    pub body: String,
+    pub body:  InterpolatedString,
     pub runtime: Identifier,
 }
 
 impl Block {
-    pub fn new(identifer: impl Into<String>, body: impl Into<String>, runtime: impl Into<String>) -> Self {
+    pub fn new(identifer: impl Into<String>, body: impl Into<InterpolatedString>, runtime: impl Into<String>) -> Self {
         Self {
             identifer: Identifier(identifer.into()),
             body: body.into(),
@@ -472,14 +665,14 @@ impl From<Identifier> for String {
     }
 }
 
-impl From<Identifier> for Atom {
-    fn from(value: Identifier) -> Self {
-        Atom::Variable(Box::new(Variable {
-            identifier: value,
-            value: Atom::Null,
-        }))
-    }
-}
+// impl From<Identifier> for Atom {
+//     fn from(value: Identifier) -> Self {
+//         Atom::Variable(Box::new(Variable {
+//             identifier: value,
+//             value: Atom::Null,
+//         }))
+//     }
+// }
 
 
 #[derive(Debug, Clone)]
@@ -493,7 +686,7 @@ pub enum Atom {
     Array(Box<Array>),
     Object(Box<Object>),
     BinaryOperation(Box<BinaryOperation>),
-    Variable(Box<Variable>),
+    // Variable(Box<Variable>),
     Function(Box<Function>),
     Null,
 }
@@ -507,7 +700,7 @@ impl Display for Atom {
             Atom::Array(value) => write!(f, "{}", value),
             Atom::Object(value) => write!(f, "{}", value),
             Atom::BinaryOperation(value) => write!(f, "{}", value),
-            Atom::Variable(value) => write!(f, "{}", value),
+            // Atom::Variable(value) => write!(f, "{}", value),
             Atom::Function(value) => write!(f, "{}", value),
             Atom::Null => write!(f, "null"),
         }
@@ -547,12 +740,12 @@ impl Atom {
         }))
     }
 
-    pub fn variable(identifier: impl Into<String>, default:  impl Into<Atom>) -> Self {
-        Atom::Variable(Box::new(Variable {
-            identifier: Identifier(identifier.into()),
-            value: default.into(),
-        }))
-    }
+    // pub fn variable(identifier: impl Into<String>, default:  impl Into<Atom>) -> Self {
+    //     Atom::Variable(Box::new(Variable {
+    //         identifier: Identifier(identifier.into()),
+    //         value: default.into(),
+    //     }))
+    // }
 }
 
 impl PartialEq for Atom {
@@ -564,7 +757,7 @@ impl PartialEq for Atom {
             (Atom::Array(a), Atom::Array(b)) => a == b,
             (Atom::Object(a), Atom::Object(b)) => a == b,
             (Atom::BinaryOperation(a), Atom::BinaryOperation(b)) => a == b,
-            (Atom::Variable(a), Atom::Variable(b)) => a == b,
+            // (Atom::Variable(a), Atom::Variable(b)) => a == b,
             (Atom::Function(a), Atom::Function(b)) => a == b,
             (Atom::Null, Atom::Null) => true,
             _ => false,
@@ -779,7 +972,7 @@ impl Function {
         }
     }
 
-    pub fn get_identifier(&self) -> Identifier {
+    pub fn name(&self) -> Identifier {
         self.identifier.clone()
     }
 
@@ -787,7 +980,7 @@ impl Function {
         self.identifier = Identifier(identifier.into());
     }
 
-    pub fn get_arguments(&self) -> Vec<Atom> {
+    pub fn args(&self) -> Vec<Atom> {
         self.arguments.clone()
     }
 

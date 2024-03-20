@@ -446,3 +446,62 @@ fn default_choices() ->   Vec<AsyncChoice> {
         ),
     ]
 }
+
+
+
+
+pub fn print_patching_variable(name: &str, value: &Atom) {
+    showln!(cyan_bold, "• ", gray_dim, name, cyan_bold, " » ", white, value);
+}
+
+pub fn show_error(line: &str) {
+    let mut remaining_line = line.to_string();
+    while remaining_line.len() > 56 {
+        let (first, second) = remaining_line.split_at(56);
+        showln!(red_bold, "│ ", gray_dim, first);
+        remaining_line = second.to_string();
+    }
+    showln!(red_bold, "│ ", gray, remaining_line);
+}
+
+
+pub fn truncate_line(line: &str, max_chars: usize) -> String {
+    if line.trim().len() > max_chars {
+        format!("{}...", &line.trim()[..max_chars])
+    } else {
+        line.trim().to_string()
+    }
+}
+
+pub fn truncate_interpolatable_line(line: InterpolatedString, max_chars: usize) -> String {
+    let line = line.to_string();
+    if line.trim().len() > max_chars {
+        format!("{}...", &line.trim()[..max_chars])
+    } else {
+        line.trim().to_string()
+    }
+}
+
+
+
+pub fn format_elapsed_time(elapsed: std::time::Duration) -> String {
+    if elapsed.as_secs() > 0 {
+        format!("{}s", elapsed.as_secs())
+    } else {
+        format!("{}ms", elapsed.as_millis())
+    }
+}
+
+pub fn print_elapsed_time(elapsed: String) {
+    let len = 60 - elapsed.len() - 3;
+    showln!(
+        white,
+        "╰─",
+        white,
+        "─".repeat(len),
+        gray,
+        " ",
+        yellow_bold,
+        elapsed
+    );
+}

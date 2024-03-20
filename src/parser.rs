@@ -112,7 +112,7 @@ fn test_parse_package() {
                         Cell::Assignment(Assignment::new("path", "path/to/rust.exe")),
                         Cell::Task(Task {
                             identifer: Identifier::new("build"),
-                            body: "echo \"Building with rust\" [:path] --version [:path] run [:file]".to_string(),
+                            body: InterpolatedString::raw("echo \"Building with rust\" [:path] --version [:path] run [:file]"),
                             runtime: Identifier::new("shell")
                         })
                     ],
@@ -339,7 +339,7 @@ fn test_parse_task() {
         result,
         Task {
             identifer: Identifier::new("greet"),
-            body:"echo \"hello world\"".to_string(),
+            body: InterpolatedString::raw("echo \"hello world\""),
             runtime: Identifier::new("shell")
         }
     );
@@ -354,7 +354,7 @@ fn test_parse_task() {
         result,
         Task {
             identifer: Identifier::new("greet"),
-            body:  "print(\"hello \") [:name]".to_string(),
+            body:   InterpolatedString::raw("print(\"hello \") [:name]"),
             runtime: Identifier::new("dart")
         }
     );
@@ -376,7 +376,7 @@ pub fn parse_task(input: &str) -> IResult<&str, Task> {
         input,
         Task {
             identifer: identifier,
-            body: body.to_string(),
+            body: InterpolatedString::raw(body),
             runtime,
         },
     ))
@@ -409,7 +409,7 @@ fn test_parse_runtime() {
                 }),
                 Cell::Task(Task {
                     identifer: Identifier::new("build"),
-                    body: "echo \"Building with dart\" [:path] --version [:path] run [:file]".to_string(),
+                    body: InterpolatedString::raw("echo \"Building with dart\" [:path] --version [:path] run [:file]".to_string()),
                     runtime: Identifier::new("shell")
                 })
             ],
@@ -620,7 +620,7 @@ pub fn parse_atom(input: &str) -> IResult<&str, Atom> {
         map(parse_binary_operation, |x| {
             Atom::BinaryOperation(Box::new(x))
         }),
-        map(parse_variable_atom, |x| Atom::Variable(Box::new(x))),
+        // map(parse_variable_atom, |x| Atom::Variable(Box::new(x))),
         map(parse_function, |x| Atom::Function(Box::new(x))),
     ))(input)
 }
