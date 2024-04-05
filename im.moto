@@ -7,7 +7,7 @@
 // for example `task some_task{ echo "hello world" }:ps` is a task cell. the tail of the cell is `:ps` which specifies the runtime to be used for executing the task
 
 task hello {
-    echo 'hello [:name="there"]'
+    echo 'hello [:name=there]'
 }:ps
 
 
@@ -25,10 +25,27 @@ task hello_from_dart {
 }:dart
 
 
+task hello_from_rust {
+    println("hello world");
+}:rust
+
 task install {
     cd ..
     cargo install  --path . 
 }:ps
+
+task blink {
+    this should be surrounded by some lines
+}:swish
+
+
+runtime swish {
+    task run {
+        echo "this is swish runtime"
+        echo "---- [:block] ---"
+    }:ps
+}:moto
+
 
 
 
@@ -44,28 +61,26 @@ runtime dart {
     task run {
         # inside a task you can write any code that you want to run in the language of the runtime
         # for example here the code is written in powershell. that is why [:asd] [:asd = asd]
-        $code = @'[:code]'@
+        $code = @'
+        [:code]
+        '@
         $wrapped_code = "void main() { $code }"
         $wrapped_code | Out-File -FilePath "./_.dart" -Encoding UTF8
         dart run "./_.dart"
     }:ps
 
-    // a runtime can have any number of tasks
-    // for example, the dart runtime can have a task that can compile a dart script to a binary
-    task compile {
-        something = @'[:block]'@
-        something | Out-File -FilePath "./_.dart" -Encoding UTF8
-        dart compile "./_.dart" --output="./_.exe" 
+
+}:moto 
+
+runtime rust {
+
+    task run {
+        $code ='[:block]' 
+        $code | Out-File -FilePath "./_.rs" -Encoding UTF8
+        rustc "./_.rs" -o "./_.exe"
+        .\_.exe
     }:ps
-
-    // the above task can be invoked on greeting_from_dart task by calling `[:greet_from_dart(compile)]`
-    // similarly, the run task can be invoked on greeting_from_dart task by calling `[:greet_from_dart(run)]`
-    // since `run` is the default task for the dart runtime, we can also call `[:greet_from_dart()]` and it will be executed using the `run` task
-    // we dont need to specify the runtime for the task to be executed as runtime for execution of a task is defined in the task itself (the tail of the task)
-
-}:moto // the runtime is defined in moto language (the code inside the curly braces is written in moto language)
-
-
+}:moto
 
 // Global Variables Documentation
 // Moto scripts support global variables which are accessible from any part of the script, regardless of the runtime.

@@ -1,51 +1,93 @@
-// Define the Rust runtime
-runtime rust {
-    // Task to initialize a new Rust project
-    task init {
-        mkdir -p [:project_name="_"]/src
-        echo @'
-        [package]
-        name = "[:project_name]"
-        version = "0.1.0"
-        edition = "2021"
-        '@ > [:project_name]/Cargo.toml
+runtime javascript {
+    task run {
+        $code = @'
+        [:block]
+        '@
+        $code | Out-File -FilePath "./_.js" -Encoding UTF8
+        node "./_.js"
     }:ps
 
-    // Task to write the Rust code to the main.rs file
-    task write_code {
-        echo """
-        fn main() {
-            [:code]
+    task compile {
+        $code = @'
+        [:block]
+        '@
+        $code | Out-File -FilePath "./_.js" -Encoding UTF8
+    }:ps
+}:moto
+
+runtime dart {
+    task run {
+        $code = @'
+        void main() {
+            [:block]
         }
-        """ > [:project_name="_"]/src/main.rs
+        '@
+        $code | Out-File -FilePath "./_.dart" -Encoding UTF8
+        dart run "./_.dart"
     }:ps
 
-    // Task to build the Rust project
-    task build {
-        cd [:project_name="_"]
-        cargo build
+    task compile {
+        $code = @'
+        void main() {
+            [:block]
+        }
+        '@
+        $code | Out-File -FilePath "./_.dart" -Encoding UTF8
+        dart compile exe "./_.dart" -o "./_.exe"
+    }:ps
+}:moto
+
+runtime rust {
+    task run {
+        $code = @'
+        fn main() {
+            [:block]
+        }
+        '@
+        $code | Out-File -FilePath "./_.rs" -Encoding UTF8
+        rustc "./_.rs" -o "./_.exe"
+        .\_.exe
     }:ps
 
-    // Task to run the Rust project
-    task  run {
-        // Initialize the Rust project
-        [:init]
-
-        // Write the Rust code to main.rs
-        [:write_code]
-
-        // Build the Rust project
-        [:build]
-
-        // Run the Rust project
-        cd [:project_name]
-        cargo run
+    task compile {
+        $code = @'
+        fn main() {
+            [:block]
+        }
+        '@
+        $code | Out-File -FilePath "./_.rs" -Encoding UTF8
+        rustc "./_.rs" -o "./_.exe"
     }:ps
 }:moto
 
 
-task test {
-    fn main(){
-        println!("Hello, World!");
-    }
+
+task greet_js {
+    console.log("Hello, [:name]!");
+}:javascript
+
+task calculate_js {
+    const result = [:a] + [:b];
+    console.log(`The sum of [:a] and [:b] is ${result}.`);
+}:javascript
+
+
+
+task greet_dart {
+    print('Hello, [:name]!');
+}:dart
+
+task calculate_dart {
+    final result = [:a] + [:b];
+    print('The sum of [:a] and [:b] is $result.');
+}:dart
+
+
+task greet_rust {
+    println!("Hello, [:name]!");
+}:rust
+
+task calculate_rust {
+    let result = [:a] + [:b];
+    println!("The sum of [:a] and [:b] is {}.", result);
 }:rust

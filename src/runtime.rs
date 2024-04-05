@@ -1,11 +1,14 @@
+use std::pin::Pin;
+
 use crate::*;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::pin;
 use tokio::process::Command;
 
 use crate::get_runtime;
 
 pub async fn execute(
-    code: impl Into<InterpolatedString>,
+    code: impl Into<String>,
     runtime: impl Into<String>,
     runtime_task: impl Into<String>,
 ) -> Result<String, String> {
@@ -29,7 +32,7 @@ pub async fn execute(
 }
 
 async fn execute_simple_runtime(
-    code: impl Into<InterpolatedString>,
+    code: impl Into<String>,
     runtime: &str,
     workspace: &str,
 ) -> Result<(), String> {
@@ -46,13 +49,13 @@ async fn execute_simple_runtime(
     let code = code.into();
 
     for line in code.lines() {
-        let displayable = truncate_interpolatable_line(line.clone(), 50);
+        let displayable = truncate_interpolatable_line(line.to_string(), 50);
         if !displayable.is_empty() {
             // showln!(yellow_bold, "↓ ", gray_dim, displayable);
             showln!(yellow_bold, "⇣ ", gray_dim, displayable);
         }
 
-        let line = inject_variables(line.clone()).await;
+        let line = dope(line.clone()).await;
 
         write_to_stdin(&mut stdin, &line).await?;
     }
@@ -67,7 +70,7 @@ async fn execute_simple_runtime(
 }
 
 async fn execute_complex_runtime(
-    code: impl Into<InterpolatedString>,
+    code: impl Into<String>,
     runtime: &str,
     runtime_task: &str,
     workspace: &str,
@@ -125,20 +128,23 @@ fn spawn_child_process(
 
 async fn execute_task_code(
     task: &Task,
-    code: impl Into<InterpolatedString>,
+    code: impl Into<String>,
     stdin: &mut tokio::process::ChildStdin,
 ) -> Result<(), String> {
     let code = code.into();
+    let block_code = dope(code.clone()).await;
+    let block_code = block_code.trim();
+    set_variable("block", block_code.into()).await;
     for line in task.get_code().lines().skip_while(|line| line.is_empty()) {
-        let displayable = truncate_interpolatable_line(line.clone(), 50);
+        let displayable = truncate_interpolatable_line(line.to_string(), 50);
         if !displayable.is_empty() {
             // showln!(yellow_bold, "↓ ", gray_dim, displayable);
             showln!(yellow_bold, "⇣ ", gray_dim, displayable);
         }
 
-        let line = inject_variables(line.clone()).await;
-        let injcode = inject_variables(code.clone()).await;
-        let line = inject_block_code(&line, &injcode);
+        let line = dope(line).await;
+
+
 
         write_to_stdin(stdin, &line).await?;
     }
@@ -213,14 +219,101 @@ impl Runtime {
 }
 
 
-pub async fn inject_variables(code: impl Into<InterpolatedString>) -> String {
+/// dope
+/// doping is the process of identifying and replacing interpolatable variables in a string
+/// with their current values (from ctx)
+/// variables are identified by the following pattern: [:variable_name] or [:variable_name=default_value] or [:variable_name(arg1, arg2, ...)]
+/// for example: "Hello, [:name]!" will be replaced with "Hello, John!" if ctx contains a variable named "name" with value "John"
+/// and "Hello, [:name=John]!" will be replaced with "Hello, John!" if ctx does not contain a variable named "name"
+/// and "Hello, [:name(John, Doe)]!" will be replaced with "Hello, how are you john the son of Doe?" if ctx has a function named "name" that takes two arguments
+/// and returns "how are you [0] the son of [1]?"
+/// and "Hello, [:name(John)]!" will be replaced with "Hello, John!" if ctx has a function named "name" that takes one argument
+/// and returns "Hello, [0]!"
+pub async fn dope(code: impl Into<String>) -> String {
+
     let mut code = code.into();
-    while code.is_computable() {
-        code = code.decompose().compute().await;
+
+    //sequentially identify and replace interpolatable variables and functions in the code
+    while let Some((start, end)) = find_interpolatable(&code) {
+        match code[start..end].find('(') {
+            Some(open) => {
+                let close = code[start..end].find(')').unwrap();
+                let (name, args) = code[start..end].split_at(open);
+                let args = &args[1..close];
+                let args = args.split(',').map(|arg| arg.trim()).collect::<Vec<&str>>();
+                let value = get_function_value(name, args).await;
+                code.replace_range(start..end, &value);
+            }
+            None => {
+                match code[start..end].find('=') {
+                    Some(equal) => {
+                        let (name, default) = code[start..end].split_at(equal);
+                        let default = &default[1..].trim_end_matches(']');
+                        let value = get_variable_value(name, default).await;
+                        code.replace_range(start..end, &value.to_string());
+                    }
+                    None => {
+                        let value = get_variable_value(&code[start..end], "").await;
+                        code.replace_range(start..end, &value.to_string());
+                    }
+                }
+            }
+        }
+
     }
-    code.to_string()
+
+    code
+
 }
 
-fn inject_block_code(line: &str, code: &str) -> String {
-    line.replace("[:code]", code).replace("[:block]", code)
+
+/// find_interpolatable
+/// find the next interpolatable variable or function in the code
+/// identified by the following pattern: [:variable_name] or [:variable_name=default_value] or [:variable_name(arg1, arg2, ...)]
+/// for example: "Hello, [:name]!" has [:name] as an interpolatable variable starting at index 7 and ending at index 13
+pub fn find_interpolatable(code: &str) -> Option<(usize, usize)> {
+    let start = code.find("[:");
+    let start = match start {
+        Some(start) => start,
+        None => return None,
+    };
+
+    let end = code[start..].find(']');
+    let end = match end {
+        Some(end) => start + end + 1,
+        None => return None,
+    };
+
+    Some((start, end))
+}
+
+/// get_variable_value
+/// get the value of a variable from the context
+/// if the variable is not found in the context, return the default value
+pub async fn get_variable_value(name: &str, default: &str) -> Atom {
+    let name = name.trim_start_matches("[:").trim_end_matches("]");
+    let default = default.trim();
+    let value = get_variable(name).await;
+    match value {
+        Some(value) => value,
+        None => default.into(),
+    }
+}
+
+/// get_function_value
+/// get the value of a function from the context
+/// if the function is not found in the context, return an empty string
+/// if the function is found in the context, call the function with the arguments and return the result
+pub async fn get_function_value(name: &str, args: Vec<&str>) -> String {
+    let name = name.trim_start_matches("[:").trim_end_matches("]");
+    let value = get_function(name).await;
+    match value {
+        Some(value) => {
+            let runtime = value.runtime();
+            let runtime_task = value.name();
+            let code = value.get_code();
+          " function not implemented".into()
+        }
+        None => "".into(),
+    }
 }

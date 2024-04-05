@@ -125,6 +125,28 @@ pub async fn get_variable(name: impl Into<String>) -> Option<Atom> {
     CTX.variables.clone().lock().await.get(&name).cloned()
 }
 
+pub async fn get_function(name: impl Into<String>) -> Option<Task> {
+    let name = name.into();
+    CTX.children
+        .clone()
+        .lock()
+        .await
+        .iter()
+        .filter_map(|cell| match cell {
+            Cell::Task(function) => {
+                if function.identifer.matches(&name) {
+                    Some(function.clone())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        })
+        .next()
+}
+
+
+
 pub async fn set_variable(name: impl Into<String>, value: Atom) {
     let name = name.into().trim().to_lowercase();
     print_setting_variable(&name, &value);

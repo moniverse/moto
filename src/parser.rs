@@ -112,7 +112,7 @@ fn test_parse_package() {
                         Cell::Assignment(Assignment::new("path", "path/to/rust.exe")),
                         Cell::Task(Task {
                             identifer: Identifier::new("build"),
-                            body: InterpolatedString::raw("echo \"Building with rust\" [:path] --version [:path] run [:file]"),
+                            body: String::from("echo \"Building with rust\" [:path] --version [:path] run [:file]"),
                             runtime: Identifier::new("shell")
                         })
                     ],
@@ -339,7 +339,7 @@ fn test_parse_task() {
         result,
         Task {
             identifer: Identifier::new("greet"),
-            body: InterpolatedString::raw("echo \"hello world\""),
+            body: String::from("echo \"hello world\""),
             runtime: Identifier::new("shell")
         }
     );
@@ -354,7 +354,7 @@ fn test_parse_task() {
         result,
         Task {
             identifer: Identifier::new("greet"),
-            body:   InterpolatedString::raw("print(\"hello \") [:name]"),
+            body:   String::from("print(\"hello \") [:name]"),
             runtime: Identifier::new("dart")
         }
     );
@@ -376,7 +376,7 @@ pub fn parse_task(input: &str) -> IResult<&str, Task> {
         input,
         Task {
             identifer: identifier,
-            body: InterpolatedString::raw(body),
+            body: String::from(body),
             runtime,
         },
     ))
@@ -409,7 +409,7 @@ fn test_parse_runtime() {
                 }),
                 Cell::Task(Task {
                     identifer: Identifier::new("build"),
-                    body: InterpolatedString::raw("echo \"Building with dart\" [:path] --version [:path] run [:file]".to_string()),
+                    body: String::from("echo \"Building with dart\" [:path] --version [:path] run [:file]".to_string()),
                     runtime: Identifier::new("shell")
                 })
             ],

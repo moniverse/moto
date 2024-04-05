@@ -473,7 +473,7 @@ pub fn truncate_line(line: &str, max_chars: usize) -> String {
     }
 }
 
-pub fn truncate_interpolatable_line(line: InterpolatedString, max_chars: usize) -> String {
+pub fn truncate_interpolatable_line(line: String, max_chars: usize) -> String {
     let line = line.to_string();
     if line.trim().len() > max_chars {
         format!("{}...", &line.trim()[..max_chars])
