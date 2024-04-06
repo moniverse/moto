@@ -46,7 +46,7 @@ Write-Output "✅ Updated version to $newVersion in Cargo.toml"
 $publishDate = Get-Date -Format "yyyy-MM-dd"
 
 # Commit messages with publish date
-$commitMessage = "🚀 Bump version to $newVersion ($publishDate)"
+$commitMessage = "🚀 Bump version to $newVersion ($publishDate) and release 📦"
 $releaseMessage = "Release v$newVersion ($publishDate)"
 
 # Add ALL files to git

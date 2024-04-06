@@ -19,7 +19,7 @@ $newCargoTomlContent = $cargoTomlContent -replace ('version = "' + [regex]::Esca
 Set-Content -Path $cargoTomlPath -Value $newCargoTomlContent
 Write-Output "updated version to $newVersion in Cargo.toml"
 $publishDate = Get-Date -Format "yyyy-MM-dd"
-$commitMessage = "☝️ Bump version to $newVersion ($publishDate)"
+$commitMessage = "☝️ Bump version to $newVersion ($publishDate) and release 📦"
 $releaseMessage = "Release v$newVersion ($publishDate)"
 # Add ALL files to git
 git add .
