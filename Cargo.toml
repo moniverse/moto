@@ -1,6 +1,6 @@
 [package]
 name = "moto"
-version = "0.2.25"
+version = "0.2.26"
 edition = "2021"
 authors = ["incredimo <a@xo.rs>"]
 description = "moto - motivated automation"
@@ -22,7 +22,7 @@ rand = "0.8.5"
 tokio = { version = "1.36.0", features = ["full"] }
 tokio-stream = { version = "0.1.14", features = ["full"] }
 tokio-util = { version = "0.7.8", features = ["codec"] }
-minimo =   "0.3.25"
+minimo =   "0.3.32"
 textwrap = "0.16.1"
 glob = "0.3.1"
 crossterm = "0.27.0"
@@ -42,6 +42,7 @@ codegen-units = 1
 opt-level = 3
 debug = false
 panic = "abort"
+
 
 
 

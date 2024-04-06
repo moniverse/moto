@@ -293,9 +293,9 @@ pub fn find_interpolatable(code: &str) -> Option<(usize, usize)> {
 pub async fn get_variable_value(name: &str, default: &str) -> Atom {
     let name = name.trim_start_matches("[:").trim_end_matches("]");
     let default = default.trim();
-    let value = get_variable(name).await;
+    let value = runtime::get_variable(name).await;
     match value {
-        Some(value) => value,
+        Some(value) => value.into(),
         None => default.into(),
     }
 }

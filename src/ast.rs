@@ -496,7 +496,7 @@ pub enum Atom {
     Array(Box<Array>),
     Object(Box<Object>),
     BinaryOperation(Box<BinaryOperation>),
-    // Variable(Box<Variable>),
+    Variable(Box<Variable>),
     Function(Box<Function>),
     Null,
 }
@@ -510,7 +510,7 @@ impl Display for Atom {
             Atom::Array(value) => write!(f, "{}", value),
             Atom::Object(value) => write!(f, "{}", value),
             Atom::BinaryOperation(value) => write!(f, "{}", value),
-            // Atom::Variable(value) => write!(f, "{}", value),
+            Atom::Variable(value) => write!(f, "{}", value),
             Atom::Function(value) => write!(f, "{}", value),
             Atom::Null => write!(f, "null"),
         }
