@@ -20,9 +20,9 @@ pub async fn execute(
 
     match runtime.as_str() {
         "shell" | "sh" | "powershell" | "ps" => {
-            execute_simple_runtime(code, &runtime, &workspace).await
+            execute_simple_runtime(&code, &runtime, &workspace).await
         }
-        _ => execute_complex_runtime(code, &runtime, &runtime_task, &workspace).await,
+        _ => execute_complex_runtime(&code, &runtime, &runtime_task, &workspace).await,
     }?;
 
     let elapsed = format_elapsed_time(instance.elapsed());
@@ -32,7 +32,7 @@ pub async fn execute(
 }
 
 async fn execute_simple_runtime(
-    code: impl Into<String>,
+    code: &str,
     runtime: &str,
     workspace: &str,
 ) -> Result<(), String> {
@@ -46,23 +46,25 @@ async fn execute_simple_runtime(
     let mut stdin = child.stdin.take().expect("failed to get stdin");
     let stdout = child.stdout.take().expect("failed to get stdout");
     let stderr = child.stderr.take().expect("failed to get stderr");
-    let code = code.into();
+
+    let code_lines: Vec<String> = code.lines().map(|line| line.to_string()).collect();
+
+    tokio::spawn(async move {
+        process_output_after_first_command(stdout, stderr, code_lines).await;
+    });
 
     for line in code.lines() {
         let displayable = truncate_interpolatable_line(line.to_string(), 50);
         if !displayable.is_empty() {
-            // showln!(yellow_bold, "↓ ", gray_dim, displayable);
             showln!(yellow_bold, "⇣ ", gray_dim, displayable);
         }
 
-        let line = dope(line.clone()).await;
+        let line = dope(line.to_string()).await;
 
         write_to_stdin(&mut stdin, &line).await?;
     }
 
     std::mem::drop(stdin);
-
-    process_output(stdout, stderr).await;
 
     child.wait().await.expect("failed to wait on child");
 
@@ -70,7 +72,7 @@ async fn execute_simple_runtime(
 }
 
 async fn execute_complex_runtime(
-    code: impl Into<String>,
+    code: &str,
     runtime: &str,
     runtime_task: &str,
     workspace: &str,
@@ -78,7 +80,7 @@ async fn execute_complex_runtime(
     let runtime = get_runtime(runtime.to_string())
         .await
         .ok_or_else(|| format!("runtime {} not found", runtime))?;
-    let task = runtime.get_task(runtime_task.to_string()).ok_or_else(|| {
+    let task = runtime.get_task(runtime_task).ok_or_else(|| {
         format!(
             "task {} not found in runtime {}",
             runtime_task,
@@ -99,11 +101,16 @@ async fn execute_complex_runtime(
     let stdout = child.stdout.take().expect("failed to get stdout");
     let stderr = child.stderr.take().expect("failed to get stderr");
 
+    let code_lines: Vec<String> = code.lines().map(|line| line.to_string()).collect();
+
+    tokio::spawn(async move {
+        process_output_after_first_command(stdout, stderr, code_lines).await;
+    });
+
     execute_task_code(&task, code, &mut stdin).await?;
 
     stdin.flush().await.expect("failed to flush stdin");
     std::mem::drop(stdin);
-    process_output(stdout, stderr).await;
 
     child.wait().await.expect("failed to wait on child");
 
@@ -128,23 +135,19 @@ fn spawn_child_process(
 
 async fn execute_task_code(
     task: &Task,
-    code: impl Into<String>,
+    code: &str,
     stdin: &mut tokio::process::ChildStdin,
 ) -> Result<(), String> {
-    let code = code.into();
-    let block_code = dope(code.clone()).await;
+    let block_code = dope(code.to_string()).await;
     let block_code = block_code.trim();
     set_variable("block", block_code.into()).await;
     for line in task.get_code().lines().skip_while(|line| line.is_empty()) {
         let displayable = truncate_interpolatable_line(line.to_string(), 50);
         if !displayable.is_empty() {
-            // showln!(yellow_bold, "↓ ", gray_dim, displayable);
             showln!(yellow_bold, "⇣ ", gray_dim, displayable);
         }
 
-        let line = dope(line).await;
-
-
+        let line = dope(line.to_string()).await;
 
         write_to_stdin(stdin, &line).await?;
     }
@@ -166,26 +169,46 @@ async fn write_to_stdin(stdin: &mut tokio::process::ChildStdin, line: &str) -> R
         .map_err(|_| "failed to write newline to stdin".to_string())
 }
 
-async fn process_output(stdout: tokio::process::ChildStdout, stderr: tokio::process::ChildStderr) {
-    let mut stdout_lines = BufReader::new(stdout).lines();
-    while let Some(line) = stdout_lines.next_line().await.unwrap() {
-        show_output(&line);
-    }
+async fn process_output_after_first_command(
+    mut stdout: tokio::process::ChildStdout,
+    mut stderr: tokio::process::ChildStderr,
+    code_lines: Vec<String>,
+) {
+    let mut stdout_reader = BufReader::new(stdout).lines();
+    let mut stderr_reader = BufReader::new(stderr).lines();
 
-    let mut stderr_lines = BufReader::new(stderr).lines();
-    while let Some(line) = stderr_lines.next_line().await.unwrap() {
-        show_error(&line);
-    }
-}
+    let mut command_index = 0;
 
-fn show_output(line: &str) {
-    let mut remaining_line = line.to_string();
-    while remaining_line.len() > 56 {
-        let (first, second) = remaining_line.split_at(56);
-        showln!(white, "│ ", white, first);
-        remaining_line = second.to_string();
+    loop {
+        tokio::select! {
+            result = stdout_reader.next_line() => {
+                match result {
+                    Ok(Some(line)) => {
+                        if command_index < code_lines.len() {
+                            if line.trim() == code_lines[command_index].trim() {
+                                command_index += 1;
+                            } else {
+                                show_output(&line);
+                            }
+                        } else {
+                            show_output(&line);
+                        }
+                    }
+                    _ => break,
+                }
+            }
+            result = stderr_reader.next_line() => {
+                match result {
+                    Ok(Some(line)) => {
+                        if command_index > 0 {
+                            show_error(&line);
+                        }
+                    }
+                    _ => break,
+                }
+            }
+        }
     }
-    showln!(white, "│ ", white, remaining_line);
 }
 
 pub async fn get_workspace() -> String {
@@ -200,13 +223,12 @@ pub async fn get_workspace() -> String {
 }
 
 impl Runtime {
-    pub fn get_task(&self, name: impl Into<String>) -> Option<Task> {
-        let name = name.into();
+    pub fn get_task(&self, name: &str) -> Option<Task> {
         self.children
             .iter()
             .filter_map(|cell| match cell {
                 Cell::Task(task) => {
-                    if task.identifer.matches(&name) {
+                    if task.identifer.matches(name) {
                         Some(task.clone())
                     } else {
                         None
@@ -218,7 +240,6 @@ impl Runtime {
     }
 }
 
-
 /// dope
 /// doping is the process of identifying and replacing interpolatable variables in a string
 /// with their current values (from ctx)
@@ -229,82 +250,66 @@ impl Runtime {
 /// and returns "how are you [0] the son of [1]?"
 /// and "Hello, [:name(John)]!" will be replaced with "Hello, John!" if ctx has a function named "name" that takes one argument
 /// and returns "Hello, [0]!"
-pub async fn dope(code: impl Into<String>) -> String {
+pub async fn dope(code: String) -> String {
+    let mut result = String::new();
+    let mut start = 0;
 
-    let mut code = code.into();
+    while let Some((new_start, end)) = find_interpolatable(&code[start..]) {
+        result.push_str(&code[start..start + new_start]);
 
-    //sequentially identify and replace interpolatable variables and functions in the code
-    while let Some((start, end)) = find_interpolatable(&code) {
-        match code[start..end].find('(') {
+        let segment = &code[start + new_start..start + end];
+        let value = match segment.find('(') {
             Some(open) => {
-                let close = code[start..end].find(')').unwrap();
-                let (name, args) = code[start..end].split_at(open);
+                let close = segment[open..].find(')').unwrap() + open;
+                let (name, args) = segment.split_at(open);
                 let args = &args[1..close];
                 let args = args.split(',').map(|arg| arg.trim()).collect::<Vec<&str>>();
-                let value = get_function_value(name, args).await;
-                code.replace_range(start..end, &value);
+                get_function_value(name, args).await
             }
             None => {
-                match code[start..end].find('=') {
+                match segment.find('=') {
                     Some(equal) => {
-                        let (name, default) = code[start..end].split_at(equal);
+                        let (name, default) = segment.split_at(equal);
                         let default = &default[1..].trim_end_matches(']');
-                        let value = get_variable_value(name, default).await;
-                        code.replace_range(start..end, &value.to_string());
+                        get_variable_value(name, default).await.to_string()
                     }
-                    None => {
-                        let value = get_variable_value(&code[start..end], "").await;
-                        code.replace_range(start..end, &value.to_string());
-                    }
+                    None => get_variable_value(segment, "").await.to_string(),
                 }
             }
-        }
+        };
 
+        result.push_str(&value);
+        start += end;
     }
 
-    code
-
+    result.push_str(&code[start..]);
+    result
 }
-
 
 /// find_interpolatable
 /// find the next interpolatable variable or function in the code
 /// identified by the following pattern: [:variable_name] or [:variable_name=default_value] or [:variable_name(arg1, arg2, ...)]
 /// for example: "Hello, [:name]!" has [:name] as an interpolatable variable starting at index 7 and ending at index 13
-pub fn find_interpolatable(code: &str) -> Option<(usize, usize)> {
-    let start = code.find("[:");
-    let start = match start {
-        Some(start) => start,
-        None => return None,
-    };
-
-    let end = code[start..].find(']');
-    let end = match end {
-        Some(end) => start + end + 1,
-        None => return None,
-    };
-
-    Some((start, end))
+fn find_interpolatable(code: &str) -> Option<(usize, usize)> {
+    let start = code.find("[:")?;
+    let end = code[start..].find(']')?;
+    Some((start, start + end + 1))
 }
 
 /// get_variable_value
 /// get the value of a variable from the context
 /// if the variable is not found in the context, return the default value
-pub async fn get_variable_value(name: &str, default: &str) -> Atom {
+async fn get_variable_value(name: &str, default: &str) -> Atom {
     let name = name.trim_start_matches("[:").trim_end_matches("]");
-    let default = default.trim();
     let value = runtime::get_variable(name).await;
-    match value {
-        Some(value) => value.into(),
-        None => default.into(),
-    }
+    value.unwrap_or_else(|| default.into())
 }
 
 /// get_function_value
 /// get the value of a function from the context
 /// if the function is not found in the context, return an empty string
 /// if the function is found in the context, call the function with the arguments and return the result
-pub async fn get_function_value(name: &str, args: Vec<&str>) -> String {
+async fn get_function_value(name: &str, args: Vec<&str>) -> String {
     let name = name.trim_start_matches("[:").trim_end_matches("]");
     let value = get_function(name).await;
     match value {
@@ -312,7 +317,8 @@ pub async fn get_function_value(name: &str, args: Vec<&str>) -> String {
             let runtime = value.runtime();
             let runtime_task = value.name();
             let code = value.get_code();
-          " function not implemented".into()
+            // function not implemented
+            "".into()
         }
         None => "".into(),
     }

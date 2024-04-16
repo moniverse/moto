@@ -456,12 +456,27 @@ pub fn print_patching_variable(name: &str, value: &Atom) {
 
 pub fn show_error(line: &str) {
     let mut remaining_line = line.to_string();
-    while remaining_line.len() > 56 {
+    while remaining_line.chars().count() > 56 {
         let (first, second) = remaining_line.split_at(56);
-        showln!(red_bold, "│ ", gray_dim, first);
+        showln!(red_bold, "│ ", red_bold, first);
         remaining_line = second.to_string();
     }
-    showln!(red_bold, "│ ", gray, remaining_line);
+    if !remaining_line.is_empty() {
+        showln!(red_bold, "│ ", red_bold, remaining_line);
+    }
+}
+
+
+pub fn show_output(line: &str) {
+    let mut remaining_line = line.to_string();
+    while remaining_line.chars().count() > 56 {
+        let (first, second) = remaining_line.split_at(56);
+        showln!(white, "│ ", white, first);
+        remaining_line = second.to_string();
+    }
+    if !remaining_line.is_empty() {
+        showln!(white, "│ ", white, remaining_line);
+    }
 }
 
 
