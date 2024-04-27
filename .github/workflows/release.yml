@@ -1,123 +1,131 @@
 name: moto release
 
 on:
- push:
-   branches:
-     - main
+  push:
+    branches:
+      - main
 
 permissions:
- contents: write
+  contents: write
 
 jobs:
 
- release-windows:
-   if: contains(github.event.head_commit.message, 'release')
-   runs-on: windows-latest
+  release-windows:
+    if: contains(github.event.head_commit.message, 'release')
+    runs-on: windows-latest
 
-   steps:
-     - uses: actions/checkout@v3
+    steps:
+      - uses: actions/checkout@v3
 
-     - name: Cache Cargo Registry and Target Directory
-       uses: actions/cache@v2
-       with:
-         path: |
-           ~/.cargo/registry
-           ~/.cargo/git
-           target
-         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-         restore-keys: |
-           ${{ runner.os }}-cargo-
+      - name: Cache Cargo Registry and Target Directory
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
-     - name: Setup Rust
-       uses: actions-rs/toolchain@v1
-       with:
-         toolchain: stable
-         profile: minimal
-         override: true
-         target: x86_64-pc-windows-msvc
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          target: x86_64-pc-windows-msvc
 
-     - name: Determine Release Tag
-       id: release_tag
-       run: echo "RELEASE_TAG=v$(date +'%Y.%m.%d.%H%M%S')" | tee -a $GITHUB_ENV
-       if: startsWith(github.ref, 'refs/tags/') == false
+      - name: Determine Release Tag
+        id: release_tag
+        run: |
+          $releaseTag = "v$(Get-Date -Format 'yyyy.MM.dd.HHmmss')"
+          echo "RELEASE_TAG=$releaseTag" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        shell: pwsh
 
-     - name: Create Release Tag and Release
-       id: create_release
-       uses: actions/create-release@v1
-       env:
-         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-       with:
-         tag_name: ${{ env.RELEASE_TAG }}
-         release_name: moto 🚀 release ${{ env.RELEASE_TAG }}
-         draft: false
-         prerelease: false
-       if: startsWith(github.ref, 'refs/tags/') == false
+      - name: Create Release Tag and Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          release_name: moto 🚀 release ${{ env.RELEASE_TAG }}
+          draft: false
+          prerelease: false
+          output-file: ${{ runner.temp }}/release.json
+        if: startsWith(github.ref, 'refs/tags/') == false
 
-     - name: Build Rust Project
-       run: cargo build --release --bin moto
+      - name: Build Rust Project
+        run: cargo build --release --bin moto
 
-     - name: Check and list files in release directory
-       run: |
-         $releaseDir = "./target/release/"
-         if (Test-Path $releaseDir/moto.exe) {
-           Write-Output "moto.exe exists in the release directory."
-         } else {
-           Write-Output "moto.exe does not exist in the release directory."
-         }
-         Write-Output "Listing all files in the release directory:"
-         Get-ChildItem -Path $releaseDir -Recurse | ForEach-Object {
-           Write-Output "$($_.FullName)"
-         }
-         if (-not (Test-Path $releaseDir/moto.exe)) {
-           exit 1
-         }
-       shell: pwsh
+      - name: Check and list files in release directory
+        run: |
+          $releaseDir = "./target/release/"
+          if (Test-Path $releaseDir/moto.exe) {
+            Write-Output "moto.exe exists in the release directory."
+          } else {
+            Write-Output "moto.exe does not exist in the release directory."
+          }
+          Write-Output "Listing all files in the release directory:"
+          Get-ChildItem -Path $releaseDir -Recurse | ForEach-Object {
+            Write-Output "$($_.FullName)"
+          }
+          if (-not (Test-Path $releaseDir/moto.exe)) {
+            exit 1
+          }
+        shell: pwsh
 
-     - name: Upload Artifacts to Release
-       uses: actions/upload-release-asset@v1
-       env:
-         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-       with:
-         upload_url: ${{ steps.create_release.outputs.upload_url }}
-         asset_path: ./target/release/moto.exe
-         asset_name: moto.exe
-         asset_content_type: application/octet-stream
+      - name: Upload Artifacts to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./target/release/moto.exe
+          asset_name: moto.exe
+          asset_content_type: application/octet-stream
 
- release-linux:
-   if: contains(github.event.head_commit.message, 'release')
-   runs-on: ubuntu-latest
+  release-linux:
+    if: contains(github.event.head_commit.message, 'release')
+    runs-on: ubuntu-latest
 
-   steps:
-     - uses: actions/checkout@v3
+    steps:
+      - uses: actions/checkout@v3
 
-     - name: Cache Cargo Registry and Target Directory
-       uses: actions/cache@v2
-       with:
-         path: |
-           ~/.cargo/registry
-           ~/.cargo/git
-           target
-         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-         restore-keys: |
-           ${{ runner.os }}-cargo-
+      - name: Cache Cargo Registry and Target Directory
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
-     - name: Setup Rust
-       uses: actions-rs/toolchain@v1
-       with:
-         toolchain: stable
-         profile: minimal
-         override: true
-         target: x86_64-unknown-linux-gnu
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          target: x86_64-unknown-linux-gnu
 
-     - name: Build Rust Project
-       run: cargo build --release --bin moto
+      - name: Determine Release Tag
+        id: release_tag
+        run: echo "RELEASE_TAG=v$(date +'%Y.%m.%d.%H%M%S')" | tee -a $GITHUB_ENV
+        if: startsWith(github.ref, 'refs/tags/') == false
 
-     - name: Upload Linux Executable to Release
-       uses: actions/upload-release-asset@v1
-       env:
-         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-       with:
-         upload_url: ${{ steps.create_release.outputs.upload_url }}
-         asset_path: ./target/release/moto
-         asset_name: moto-linux
-         asset_content_type: application/octet-stream
+      - name: Build Rust Project
+        run: cargo build --release --bin moto
+
+      - name: Upload Linux Executable to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./target/release/moto
+          asset_name: moto-linux
+          asset_content_type: application/octet-stream
