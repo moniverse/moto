@@ -54,6 +54,7 @@ jobs:
           draft: false
           prerelease: false
           output-file: ${{ runner.temp }}/release.json
+        if: startsWith(github.ref, 'refs/tags/') == false
 
       - name: Build Rust Project
         run: cargo build --release --bin moto
@@ -114,7 +115,7 @@ jobs:
 
       - name: Determine Release Tag
         id: release_tag
-        run: echo "RELEASE_TAG=v$(date +'%Y.%m.%d.%H%M%S')" | tee -a $GITHUB_ENV
+        run: echo "RELEASE_TAG=${{ needs.release-windows.outputs.release_tag }}" >> $GITHUB_ENV
 
       - name: Build Rust Project
         run: cargo build --release --bin moto
