@@ -47,7 +47,11 @@ Write-Output "✅ Updated version to $newVersion in Cargo.toml"
 $publishDate = Get-Date -Format "yyyy-MM-dd"
 
 # Commit messages with publish date
-$commitMessage = "🚀 Bump version to $newVersion ($publishDate) and release 📦"
+if ($local) {
+    $commitMessage = "🔧 Bump version to $newVersion ($publishDate)"
+} else {
+    $commitMessage = "🚀 Bump version to $newVersion ($publishDate) and release 📦"
+}
 $releaseMessage = "Release v$newVersion ($publishDate)"
 
 # Add ALL files to git
@@ -60,8 +64,28 @@ git commit -m "$commitMessage"
 git tag -a "v$newVersion" -m "$releaseMessage"
 
 if ($local) {
-    Write-Output "🏠 Running in local mode, skipping push and release."
-    Write-Output "🎉 Release v$newVersion completed locally!"
+    Write-Output "🏠 Running in local mode, building binaries for Windows and Linux..."
+
+    # Build for Windows
+    cargo build --release --bin moto --target x86_64-pc-windows-msvc
+
+    # Build for Linux
+    cargo build --release --bin moto --target x86_64-unknown-linux-gnu
+
+    # Create a new release
+    $releaseId = New-RandomGuid
+    $releasePath = "releases/$releaseId"
+    New-Item -ItemType Directory -Path $releasePath | Out-Null
+
+    # Copy Windows binary to release directory
+    $windowsBinaryPath = "./target/x86_64-pc-windows-msvc/release/moto.exe"
+    Copy-Item -Path $windowsBinaryPath -Destination "$releasePath/moto-windows.exe"
+
+    # Copy Linux binary to release directory
+    $linuxBinaryPath = "./target/x86_64-unknown-linux-gnu/release/moto"
+    Copy-Item -Path $linuxBinaryPath -Destination "$releasePath/moto-linux"
+
+    Write-Output "🎉 Release v$newVersion completed locally! Binaries are available in $releasePath"
     exit 0
 }
 
