@@ -4,8 +4,10 @@ use super::*;
 use futures::{Future, FutureExt};
 use minimo::choice;
 use std::collections::HashMap;
+use std::{env, fs};
 use std::fmt::Result;
 use std::io::Write;
+use std::path::Path;
 use std::pin::Pin;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
@@ -65,8 +67,47 @@ pub async fn get_tasks() -> Vec<Task> {
     for package in get_packages().await {
         tasks.extend(package.tasks());
     }
+
+    //check if moto is installed. if not diplay an option to install it
+    if is_moto_installed().await == false {
+        tasks.push(Task::new("install moto", "[:install_moto()]","moto"));
+        
+    }
     tasks
 }
+
+pub async fn is_moto_installed() -> bool {
+    let user_dir = env::var("USERPROFILE").unwrap();
+    let moto_dir = format!("{}\\moto", user_dir);
+    let moto_exe = format!("{}\\moto.exe", moto_dir);
+    Path::new(&moto_exe).exists()
+}
+
+pub async fn install_moto() {
+    // Copy the moto binary to user/.moto directory
+    let user_dir = env::var("USERPROFILE").unwrap();
+    let moto_dir = format!("{}\\moto", user_dir);
+    let moto_exe = format!("{}\\moto.exe",  moto_dir);
+
+    // Create the moto directory
+    if !Path::new(&moto_dir).exists() {
+        fs::create_dir_all(&moto_dir).unwrap();
+    }
+
+    // Copy the moto binary to the moto directory
+    let self_exe = env::current_exe().unwrap().to_path_buf();
+    if !Path::new(&moto_exe).exists() {
+        fs::copy(self_exe, &moto_exe).unwrap();
+    }
+
+    // Add the path to PATH
+    let path_var = "PATH";
+    let mut path_value = String::from(env::var(path_var).unwrap());
+    path_value.push_str(";");
+    path_value.push_str(&moto_dir);
+    env::set_var(path_var, &path_value);
+}
+
 
 pub async fn get_task(name: impl Into<String>) -> Option<Task> {
     let name = name.into();
@@ -143,6 +184,21 @@ pub async fn get_function(name: impl Into<String>) -> Option<Task> {
             _ => None,
         })
         .next()
+}
+
+pub type Fx = Arc<fn() ->  Pin<Box<dyn Future<Output = ()> + Send>> >;
+
+lazy_static::lazy_static!{
+    pub static ref INTERNAL_FUNCTIONS: HashMap<String,  Fx> = {
+        let mut map = HashMap::<String, Fx>::new();
+        map.insert("install moto".to_string(), Arc::new(|| Box::pin(install_moto())) );
+        map
+    };
+}
+
+pub async fn get_internal_function(name: impl Into<String>) -> Option<Fx> {
+    let name = name.into();
+    INTERNAL_FUNCTIONS.get(&name).cloned()
 }
 
 

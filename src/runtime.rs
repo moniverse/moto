@@ -18,6 +18,10 @@ pub async fn execute(
     let workspace = get_workspace().await;
     let instance = std::time::Instant::now();
 
+    if runtime == "moto" {
+        execute_internal(&code, &runtime, &runtime_task, &workspace).await;
+    }
+
     match runtime.as_str() {
         "shell" | "sh" | "powershell" | "ps" => {
             execute_simple_runtime(&code, &runtime, &workspace).await
@@ -31,11 +35,27 @@ pub async fn execute(
     Ok("".into())
 }
 
-async fn execute_simple_runtime(
+async fn execute_internal(
     code: &str,
     runtime: &str,
+    runtime_task: &str,
     workspace: &str,
 ) -> Result<(), String> {
+    //when runtime is moto, the implementation is a rust function that is stored in a hashmap
+    let fx = get_internal_function(runtime_task).await;
+    match fx {
+        Some(fx) => {
+            showln!(green_bold, "⇣ ", gray_dim, "executing internal function");
+            let result = fx().await;
+        }
+        None => {
+            showln!(red_bold, "⇣ ", gray_dim, "Function not found");
+        }
+    }
+    Ok(())
+}
+
+async fn execute_simple_runtime(code: &str, runtime: &str, workspace: &str) -> Result<(), String> {
     let (command, arg) = match runtime {
         "shell" | "sh" => ("bash", "-c"),
         "powershell" | "ps" => ("pwsh", "-Command"),
@@ -44,6 +64,17 @@ async fn execute_simple_runtime(
 
     let mut child = spawn_child_process(command, arg, workspace)?;
     let mut stdin = child.stdin.take().expect("failed to get stdin");
+
+    let drain_stdout = child.stdout.take().expect("failed to get stdout");
+    let drain_stderr = child.stderr.take().expect("failed to get stderr");
+
+    // Drain the initial stdout output during child process launch
+    tokio::spawn(async move {
+        drain_initial_output(drain_stdout, drain_stderr).await;
+    })
+    .await
+    .unwrap();
+
     let stdout = child.stdout.take().expect("failed to get stdout");
     let stderr = child.stderr.take().expect("failed to get stderr");
 
@@ -69,6 +100,37 @@ async fn execute_simple_runtime(
     child.wait().await.expect("failed to wait on child");
 
     Ok(())
+}
+
+async fn drain_initial_output(
+    mut stdout: tokio::process::ChildStdout,
+    mut stderr: tokio::process::ChildStderr,
+) {
+    let mut stdout_reader = BufReader::new(stdout).lines();
+    let mut stderr_reader = BufReader::new(stderr).lines();
+
+    loop {
+        tokio::select! {
+            result = stdout_reader.next_line() => {
+                match result {
+                    Ok(Some(line)) => {
+                        // Consume the line from stdout
+                        showln!(purple_dim, line);
+                    }
+                    _ => break,
+                }
+            }
+            result = stderr_reader.next_line() => {
+                match result {
+                    Ok(Some(line)) => {
+                        // Consume the line from stderr
+                        showln!(red_bold, line);
+                    }
+                    _ => break,
+                }
+            }
+        }
+    }
 }
 
 async fn execute_complex_runtime(
@@ -98,6 +160,17 @@ async fn execute_complex_runtime(
 
     let mut child = spawn_child_process(command, arg, workspace)?;
     let mut stdin = child.stdin.take().expect("failed to get stdin");
+
+    let drain_stdout = child.stdout.take().expect("failed to get stdout");
+    let drain_stderr = child.stderr.take().expect("failed to get stderr");
+
+    // Drain the initial stdout output during child process launch
+    tokio::spawn(async move {
+        drain_initial_output(drain_stdout, drain_stderr).await;
+    })
+    .await
+    .unwrap();
+
     let stdout = child.stdout.take().expect("failed to get stdout");
     let stderr = child.stderr.take().expect("failed to get stderr");
 
@@ -266,16 +339,14 @@ pub async fn dope(code: String) -> String {
                 let args = args.split(',').map(|arg| arg.trim()).collect::<Vec<&str>>();
                 get_function_value(name, args).await
             }
-            None => {
-                match segment.find('=') {
-                    Some(equal) => {
-                        let (name, default) = segment.split_at(equal);
-                        let default = &default[1..].trim_end_matches(']');
-                        get_variable_value(name, default).await.to_string()
-                    }
-                    None => get_variable_value(segment, "").await.to_string(),
+            None => match segment.find('=') {
+                Some(equal) => {
+                    let (name, default) = segment.split_at(equal);
+                    let default = &default[1..].trim_end_matches(']');
+                    get_variable_value(name, default).await.to_string()
                 }
-            }
+                None => get_variable_value(segment, "").await.to_string(),
+            },
         };
 
         result.push_str(&value);
