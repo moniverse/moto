@@ -127,6 +127,7 @@ async fn execute_runtime(command: &str, arg: &str, code: &str) -> Result<(), Str
 
 fn spawn_child_process(command: &str, arg: &str) -> Result<tokio::process::Child, String> {
     Command::new(command)
+        .arg("-NoProfile")
         .arg(arg)
         .arg("-")
         .stdin(std::process::Stdio::piped())
