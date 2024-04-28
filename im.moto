@@ -143,6 +143,18 @@ package rust {
     }:rust
 
 
+    task list_processes {
+        echo "Running Processes:"
+        Get-Process | Format-Table -Property ProcessName, Id
+    }:ps
+    
+    task kill_process {
+        Stop-Process -Id [:process_id] -Force
+        echo "Process with ID [:process_id] terminated."
+    }:ps
+    
+    [:list_processes()]
+    [:kill_process(process_id: 1234)]
 
     // more about moto language
     // moto language is a simple language that is easy to understand and write

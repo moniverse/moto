@@ -1,11 +1,13 @@
 [package]
 name = "moto"
-version = "0.2.42"
+version = "0.2.43"
 edition = "2021"
 authors = ["incredimo <a@xo.rs>"]
 description = "moto - motivated automation"
 license = "MIT"
 repository = "https://github.com/moniverse/moto"
+
+
 
 
 
@@ -41,13 +43,6 @@ codegen-units = 1
 opt-level = 3
 debug = false
 panic = "abort"
-
-
-
-
-
-
-
 
 
 
