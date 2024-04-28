@@ -19,7 +19,7 @@ pub async fn execute(
     let instance = std::time::Instant::now();
 
     if runtime == "moto" {
-        execute_internal(&code, &runtime, &runtime_task, &workspace).await;
+        execute_internal(&code, &runtime, &runtime_task, &workspace).await.expect("failed to execute internal function");
     }
 
     match runtime.as_str() {
