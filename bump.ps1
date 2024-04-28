@@ -54,6 +54,27 @@ if ($local) {
 }
 $releaseMessage = "Release v$newVersion ($publishDate)"
 
+# build in release mode and move the binaries to the release folder
+# delete the release folder if it exists
+releaseFolder = "./release"
+if (Test-Path $releaseFolder) {
+    Remove-Item -Recurse -Force $releaseFolder
+}
+# create a release folder if it doesn't exist
+if (-not (Test-Path $releaseFolder)) {
+    New-Item -ItemType Directory -Path $releaseFolder | Out-Null
+}
+
+# build for windows
+cargo build --release --bin moto --target x86_64-pc-windows-msvc --out-dir $releaseFolder
+Write-Output "🔨 Successfully built Windows binary "
+# build for linux
+cargo build --release --bin moto --target x86_64-unknown-linux-gnu --out-dir $releaseFolder
+Write-Output "🔨 Successfully built Linux binary "
+
+
+
+
 # Add ALL files to git
 git add .
 
