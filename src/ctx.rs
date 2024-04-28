@@ -166,6 +166,10 @@ pub async fn get_variable(name: impl Into<String>) -> Option<Atom> {
     CTX.variables.clone().lock().await.get(&name).cloned()
 }
 
+pub async fn get_variable_or_default(name: impl Into<String>, default: impl Into<Atom>) -> Atom {
+    get_variable(name).await.unwrap_or(default.into())
+}
+
 pub async fn get_function(name: impl Into<String>) -> Option<Task> {
     let name = name.into();
     CTX.children
