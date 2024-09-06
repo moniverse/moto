@@ -23,7 +23,7 @@ pub enum Cell {
     Block(Block),
     //imports are used to import code from other cells
     //e.g `import "math.moto" as math`
-    #[display(fmt = "import [:path] as [:alias]")]
+    #[display("import [:path] as [:alias]")]
     Import(Import),
     ///package is used to define a package
     /// a package has multiple cells    

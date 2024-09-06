@@ -155,8 +155,8 @@ fn test_ignore_comments_everywhere() {
         "#;
 
     let result = parse_package(input).unwrap();
-    result.0.println(in_cyan);
-    result.1.println(in_yellow);
+    result.0.in_cyan().println();
+    result.1.in_yellow().println();
 
 
     let input = r#"
@@ -181,9 +181,9 @@ task greet_from_dart {
 // a runtime is a collection of tasks and variables that are used to execute a task
 "#;
     let result = parse_cells(input).unwrap();
-    result.0.println(in_cyan);
+    result.0.in_cyan().println();
     for cell in result.1 {
-        cell.println(in_yellow);
+        cell.in_yellow().println();
     }
 
 

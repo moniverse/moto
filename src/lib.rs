@@ -4,7 +4,7 @@ use nom::InputLength;
 pub use menu::*;
 pub mod menu;
 pub use ast::*;
-pub use derive_more::*;
+pub use derive_more::{Display, From,Error};
 pub use minimo::*;
 pub mod ast;
 
@@ -30,7 +30,7 @@ pub mod repository {
     ///! the user can also add their own repository to the context
 
     #[derive(Debug, Display, From, Clone)]
-    #[display(fmt = "{}", name)]
+    #[display( "{}", name)]
     pub struct Repository {
         name: String,
         url: String,

@@ -1,0 +1,54 @@
+task something {
+    echo "Hello, World!"
+}:shell
+
+
+//you can make custom commands in a natural way
+task open [:name] {
+    echo "Opening [:name]"
+}:shell
+
+// for example the below can be triggerd either by `moto go google.com` or by `moto go to google.com`
+task go (to)? [:path] {
+    echo "Going to [:path]"
+}:shell
+
+//we can also have tasks with multiple parameters
+//this can be triggered by `moto run ls -la`
+task run [:command] [:args] {
+    echo "Running [:command] with args [:args]"
+}:shell
+
+//or with default values
+//this will search for "who am i" if no query is provided
+task search [:query="who am i"] {
+    echo "Searching for [:query]"
+}:shell
+
+
+task embeded_javascript [:command=(start | stop)] {
+   let something = "asdad";
+   console.log(something);  
+ }:js
+ 
+ 
+ task embeded_powershell [:command=(start | stop)] {
+     Invoke-Expression "$command"
+ }:ps
+ 
+ task embeded_dart [:command=(start | stop)] {
+    var something = 1 +2 ;
+ }:dart
+ 
+ 
+ task embeded_rust [:command=(start | stop)] {
+     println!("Hello, World!");
+ }:rust
+
+//we can also have either options
+// this can be triggered by `moto call mom` or `moto call dad`
+task call [:name=(mom | dad)] {
+  ls -la
+  echo "Calling [:name]"
+}:shell
+

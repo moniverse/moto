@@ -1,3 +1,5 @@
+Sure, let's revise the example to use a different scenario. We will use an example where a task can open a browser or a specific application with an optional prefix.
+
 # 🌈 MOTO: A Versatile Automation & Scripting System
 
 ## Overview
@@ -37,9 +39,10 @@ let hobbies = ["reading", "coding", "gaming"]
 ### Tasks
 
 ```moto
-task hello {
-    echo "Hello, $ENV{USER}!"
-}:ps
+task (please)? open (browser | [path:"chrome.exe"]) {
+    let target = if ([:path]) { [:path] } else { "browser" }
+    exec $target
+}:shell
 ```
 
 ### Runtimes
@@ -49,7 +52,7 @@ task greetings_from_dart {
     void main() {
         print("Hello from Dart");
     }
-}:dart
+}:dart  
 
 task greet_from_rust {
     fn main() {
@@ -66,7 +69,7 @@ runtime csharp {
     task run {
         $something = @'[:block]'@
         $something | Out-File -FilePath "./_.cs" -Encoding UTF8
-        csc "./_.cs" 
+        csc "./_.cs"
         ./_.exe
     }:shell
 }:moto
@@ -84,11 +87,49 @@ task read_story {
 }:ps
 ```
 
+## Parameterized Tasks with Optional Prefixes and Either-Or Conditions
+
+With :moto, you can define tasks with optional prefixes and either-or conditions to make task invocation more flexible and intuitive.
+
+### Example Task Definition
+
+```moto
+task (please)? open (browser | [path:"chrome.exe"]) {
+    let target = if ([:path]) { [:path] } else { "browser" }
+    exec $target
+}:shell
+```
+
+### Example Task Invocations
+
+1. Call the task without "please":
+   ```moto
+   open browser
+   ```
+
+2. Call the task with "please":
+   ```moto
+   please open browser
+   ```
+
+3. Call the task with a specific application path:
+   ```moto
+   open "firefox.exe"
+   ```
+
+4. Call the task with "please" and a specific application path:
+   ```moto
+   please open "firefox.exe"
+   ```
+
+### Benefits
+
+- **Flexibility:** Supports optional prefixes and either-or conditions using `|`, allowing for more flexible task definitions.
+- **Default Values:** Provides default values for parameters while allowing overrides.
+- **Readability:** Enhances readability by clearly defining optional parts and default values.
+- **Simplicity:** Simplifies task definitions and calls, making the scripting language more intuitive.
 
 ## Contributing
 
 Contributions to :moto are welcome! If you encounter any issues, have suggestions for improvements, or would like to contribute new features, please open an issue or submit a pull request on the [GitHub repository](https://github.com/moniverse/moto).
 
----
-
-Feel free to explore the power and versatility of :moto in your automation and scripting tasks. Happy automating! 🚀
