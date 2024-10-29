@@ -13,7 +13,7 @@ pub enum Cell {
     Assignment(Assignment),
     //tasks are used to define a sequence of commands
     //e.g `task greet { echo "hello world" }:shell`
-    // #[display(fmt = "task [:identifer] {{ [:body] }}:[:runtime]")]
+    // #[display("task [:identifer] {{ [:body] }}:[:runtime]")]
     Task(Task),
     //runtimes are used to define a runtime for a specific language
     //e.g `runtime dart { let version = "3.7.0" }:shell`
@@ -279,7 +279,7 @@ impl Package {
 /// or `let x = [1,2,3];` or `let x = {a:1, b:2};`
 /// or `let x = 5 + 5;` or `let x = "hello" + "world";`
 /// identifier in gray = in yellow and value in green using ascii escape codes
-#[display(fmt = "\x1b[33m{identifier} \x1b[90m= \x1b[32m{value}\x1b[0m")]
+#[display("\x1b[33m{identifier} \x1b[90m= \x1b[32m{value}\x1b[0m")]
 pub struct Assignment {
     pub identifier: Identifier,
     pub value: Atom,
@@ -307,7 +307,7 @@ impl Assignment {
 /// e.g `task greet { echo "hello world" }:shell`
 /// or `task greet { print("hello world"); }:dart`
 /// or `task greet { console.log("hello world"); }:js`
-#[display(fmt = "task \x1b[33m{identifer}:\x1b[33m{runtime}\x1b[0m")]
+#[display("task \x1b[33m{identifer}:\x1b[33m{runtime}\x1b[0m")]
 pub struct Task {
     pub identifer: Identifier,
     pub body:  String,
@@ -356,7 +356,7 @@ impl Task {
 ///     [:path] run [:file]
 /// }:shell
 /// }:moto`
-#[display(fmt = "runtime \x1b[33m{identifer}:\x1b[33m{runtime}\x1b[0m")]
+#[display("runtime \x1b[33m{identifer}:\x1b[33m{runtime}\x1b[0m")]
 pub struct Runtime {
     pub identifer: Identifier,
     pub children: Vec<Cell>,
@@ -388,7 +388,7 @@ impl Runtime {
 #[derive(Debug, Clone, PartialEq, Eq, Display)]
 ///blocks are used to define reusable blocks of code
 /// e.g `block developerCredits { developed by incredimo for xo.rs }:text`
-#[display(fmt = "block \x1b[33m{identifer}:\x1b[33m{runtime}\x1b[0m")]
+#[display("block \x1b[33m{identifer}:\x1b[33m{runtime}\x1b[0m")]
 pub struct Block {
     pub identifer: Identifier,
     pub body:  String,
@@ -420,7 +420,7 @@ impl Block {
 #[derive(Debug, Clone, PartialEq, Eq, Display)]
 ///imports are used to import code from other cells
 /// e.g `import "math.moto" as math`
-#[display(fmt = "import [:path] as [:alias]")]
+#[display("import [:path] as [:alias]")]
 pub struct Import {
     pub path: String,
     pub alias: Identifier,
@@ -439,7 +439,7 @@ impl Import {
 ///identifiers are used to define the name of a variable, task, runtime, block etc
 /// e.g in `let x = 5;` x is the identifier
 /// identifier always printed in bright yellow using ascii escape codes
-#[display(fmt = "\x1b[33m{}\x1b[0m", "0")]
+#[display("\x1b[33m{}\x1b[0m", "0")]
 pub struct Identifier(pub String);
 
 impl Identifier {
@@ -635,7 +635,7 @@ impl From<Option<Atom>> for Atom {
 ///arrays are used to define a list of values
 /// e.g `[1,2,3]` or `["hello", "world"]` or `[true, false]`
 /// tailing commas are allowed and ignored
-#[display(fmt = "[values.iter().map(|x| x.to_string()).collect::<Vec<String>>().join(\", \")]")]
+#[display("[values.iter().map(|x| x.to_string()).collect::<Vec<String>>().join(\", \")]")]
 pub struct Array {
     pub values: Vec<Atom>,
 }
@@ -672,7 +672,7 @@ impl Array {
 /// e.g `{a:1, b:2}` or `{name:"incredimo", age:30}`
 /// tailing commas are allowed and ignored
 #[display(
-    fmt = "{{values.iter().map(|(k,v)| k.to_string() + \":\" + &v.to_string()).collect::<Vec<String>>().join(\", \")}}"
+    "{{values.iter().map(|(k,v)| k.to_string() + \":\" + &v.to_string()).collect::<Vec<String>>().join(\", \")}}"
 )]
 pub struct Object {
     pub values: Vec<(String, Atom)>,
@@ -681,7 +681,7 @@ pub struct Object {
 #[derive(Debug, Clone, PartialEq, Eq, Display)]
 ///binary operations are used to define operations between two atoms
 /// e.g `5 + 5` or `"hello" + "world"` or `5 + x` or `x + y` or `x + 5` or `x + "hello"` or `"something" + [:x]`
-#[display(fmt = "[:left] [:operator] [:right]")]
+#[display("[:left] [:operator] [:right]")]
 pub struct BinaryOperation {
     pub left: Atom,
     pub operator: Operator,
@@ -692,7 +692,7 @@ pub struct BinaryOperation {
 ///variables are used to reference a value
 /// e.g `[:name]` or `[:x=5]` or `[:x="hello"]` or `[:x=true]` or `[:x=[1,2,3]]` or `[:x={a:1, b:2}]`
 /// default value is optional and can be omitted
-#[display(fmt = "var {identifier}")]
+#[display("var {identifier}")]
 pub struct Variable {
     pub identifier: Identifier,
     pub value: Atom,
@@ -770,7 +770,7 @@ impl Variable {
 ///functions are used to reference a function
 /// e.g `[:print("hello world")]` or `[:console.log("hello world")]`
 #[display(
-    fmt = "[:identifier]([:arguments.iter().map(|x| x.to_string()).collect::<Vec<String>>().join(\", \")])"
+    "[:identifier]([:arguments.iter().map(|x| x.to_string()).collect::<Vec<String>>().join(\", \")])"
 )]
 pub struct Function {
     pub identifier: Identifier,

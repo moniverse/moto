@@ -1,6 +1,6 @@
 [package]
 name = "moto"
-version = "0.2.44"
+version = "0.2.45"
 edition = "2021"
 authors = ["incredimo <a@xo.rs>"]
 description = "moto - motivated automation"
@@ -28,7 +28,7 @@ minimo =   "0.5.12"
 textwrap = "0.16.1"
 glob = "0.3.1"
 crossterm = "0.28.1"
-ratatui = "0.28.0"
+ratatui = "0.29.0"
 chrono = "0.4.34"
 md5 = "0.7.0"
 uuid = { version = "1.7.0", features = ["v4"] }
@@ -43,6 +43,7 @@ codegen-units = 1
 opt-level = 3
 debug = false
 panic = "abort"
+
 
 
 

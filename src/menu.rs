@@ -23,7 +23,7 @@ const BANNER: &str = r#"
 "#;
 
 pub fn print_banner() {
-    println!("{}", vibrant(BANNER));
+    println!("{}", BANNER.vibrant());
     divider_vibrant();
 }
 
